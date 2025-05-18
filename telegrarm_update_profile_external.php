@@ -1,6 +1,12 @@
 <?php
 /**
- * Notify on user update
+ * TelegrARM - Telegram Bot Profile Update Notification
+ *
+ * Sends Telegram notifications when a user profile is updated.
+ * 
+ * @author  Renato Bonomini <https://github.com/renatobo>
+ * @link    https://github.com/renatobo/TelegrARM
+ * @license GPLv2 or later
  */
 
 function telegrarm_profile_update ($user_id, $form_data) {

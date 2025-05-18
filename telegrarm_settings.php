@@ -1,5 +1,16 @@
 <?php
 /**
+ * TelegrARM - Telegram Bot Settings Integration for WordPress
+ *
+ * This file registers and manages all plugin settings, sections, and fields
+ * for the TelegrARM plugin in the WordPress admin.
+ *
+ * @author  Renato Bonomini <https://github.com/renatobo>
+ * @link    https://github.com/renatobo/TelegrARM
+ * @license GPLv2 or later
+ */
+
+/**
  * Register the settings in the WordPress options table.
  */
 
@@ -337,6 +348,15 @@ function telegrarm_settings_page_cb() {
     ?>
     <div class="wrap">
         <h1>Telegram Bot Settings</h1>
+        <p>
+            <strong>TelegrARM</strong> enables Telegram notifications for select ARMember user events, such as profile updates and new user registrations. Use this page to configure your Telegram bot integration and ARMember field mappings.
+        </p>
+        <div style="margin-bottom:1em; padding: 10px; background: #f8f8f8; border-left: 4px solid #0088cc;">
+            <strong>Plugin Updates:</strong><br>
+            This plugin supports automatic updates via GitHub using the <a href="https://github.com/afragen/github-updater" target="_blank">GitHub Updater</a> plugin.<br>
+            To enable updates, install and activate the GitHub Updater plugin. The repository is:<br>
+            <code>https://github.com/renatobo/TelegrARM</code>
+        </div>
         <form method="post" action="options.php">
             <?php
             settings_fields('telegrarm_settings_group');
@@ -344,6 +364,17 @@ function telegrarm_settings_page_cb() {
             submit_button('Save Telegram Settings');
             ?>
         </form>
+        <div style="margin-top:2em; padding: 10px; background: #f8f8f8; border-left: 4px solid #34ab5e;">
+            <strong>How to set up a Telegram Bot and retrieve the API token:</strong>
+            <ol>
+                <li>Open Telegram and search for <strong>@BotFather</strong>.</li>
+                <li>Start a chat and send the command <code>/newbot</code>.</li>
+                <li>Follow the instructions to choose a name and username for your bot.</li>
+                <li>After creation, BotFather will provide you with an <strong>API token</strong>. Copy this token and paste it into the "Telegram Bot API Token" field above.</li>
+                <li>Add your bot to your Telegram group or channel and grant it permission to post messages.</li>
+            </ol>
+            For more details, see the <a href="https://core.telegram.org/bots/tutorial#introduction" target="_blank">Telegram Bot documentation</a>.
+        </div>
     </div>
     <?php
 }
