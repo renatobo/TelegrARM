@@ -353,6 +353,7 @@ function telegrarm_settings_page_cb() {
         </p>
         <div style="margin-bottom:1em; padding: 10px; background: #f8f8f8; border-left: 4px solid #0088cc;">
             <strong>Plugin Updates:</strong><br>
+            Current Version: <?php echo BONO_TELEGRARM_VERSION; ?><br>
             This plugin supports automatic updates via GitHub using the <a href="https://github.com/afragen/github-updater" target="_blank">GitHub Updater</a> plugin.<br>
             To enable updates, install and activate the GitHub Updater plugin. The repository is:<br>
             <code>https://github.com/renatobo/TelegrARM</code>

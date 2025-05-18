@@ -3,7 +3,7 @@
  * Plugin Name:       TelegrARM
  * Plugin URI:        https://renatobo.hopto.org/
  * Description:       Enable Telegram notifications for user profile updates and other ARMember events.
- * Version:           0.2
+ * Version:           0.2.0
  * Author:            Renato Bonomini
  * Author URI:        https://github.com/renatobo
  * License:           GPLv2 or later
@@ -20,6 +20,8 @@
  * @license           GPLv2 or later
  * @link              https://github.com/renatobo/TelegrARM
  */
+
+define('BONO_TELEGRARM_VERSION', '0.2.0');
 
 require_once 'telegrarm_settings.php';
 
