@@ -1,3 +1,5 @@
+name: Update Stable Tag
+
 on:
   push:
     branches:
