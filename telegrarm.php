@@ -4,6 +4,8 @@
  * Plugin URI:        https://renatobo.hopto.org/
  * Description:       Enable Telegram notifications for user profile updates and other ARMember events.
  * Version:           0.2.1
+ * Requires at least: 6.7
+ * Requires PHP:      8.0
  * Author:            Renato Bonomini
  * Author URI:        https://github.com/renatobo
  * License:           GPLv2 or later
@@ -22,6 +24,18 @@
  */
 
 define('BONO_TELEGRARM_VERSION', '0.2.1');
+
+// Check PHP version requirement
+if (version_compare(PHP_VERSION, '8.0.0', '<')) {
+    add_action('admin_notices', function() {
+        echo '<div class="notice notice-error"><p>';
+        echo '<strong>TelegrARM:</strong> This plugin requires PHP 8.0 or higher. ';
+        echo 'You are running PHP ' . esc_html(PHP_VERSION) . '. ';
+        echo 'Please upgrade your PHP version.';
+        echo '</p></div>';
+    });
+    return;
+}
 
 require_once 'telegrarm_settings.php';
 

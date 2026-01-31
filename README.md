@@ -13,7 +13,7 @@ This plugin is designed as a framework that you can extend for additional notifi
 ## Requirements
 
 - WordPress 6.7+
-- PHP 8.0+
+- PHP 8.0+ (tested up to PHP 8.5)
 - ARMember plugin installed and configured
 - Telegram bot token and channel/group
 

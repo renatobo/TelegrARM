@@ -28,7 +28,7 @@ TelegrARM/
 ## Technical Requirements
 
 - **WordPress:** 6.7+
-- **PHP:** 8.0+
+- **PHP:** 8.0+ (tested up to PHP 8.5)
 - **Dependencies:** ARMember plugin
 - **External Services:** Telegram Bot API
 
