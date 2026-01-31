@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="5"
+    resolveFromConfigFile="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    findUnusedCode="false"
+    findUnusedVariablesAndParams="false"
+>
+    <projectFiles>
+        <directory name="." />
+        <ignoreFiles>
+            <directory name="vendor" />
+            <directory name=".git" />
+            <directory name=".github" />
+        </ignoreFiles>
+    </projectFiles>
+
+    <issueHandlers>
+        <!-- WordPress-specific suppressions -->
+        <UndefinedFunction>
+            <errorLevel type="suppress">
+                <!-- Suppress WordPress core function warnings -->
+                <referencedFunction name="add_action" />
+                <referencedFunction name="add_filter" />
+                <referencedFunction name="get_option" />
+                <referencedFunction name="update_option" />
+                <referencedFunction name="delete_option" />
+                <referencedFunction name="register_setting" />
+                <referencedFunction name="add_settings_section" />
+                <referencedFunction name="add_settings_field" />
+                <referencedFunction name="settings_fields" />
+                <referencedFunction name="do_settings_sections" />
+                <referencedFunction name="add_menu_page" />
+                <referencedFunction name="esc_html" />
+                <referencedFunction name="esc_attr" />
+                <referencedFunction name="esc_url" />
+                <referencedFunction name="sanitize_text_field" />
+                <referencedFunction name="sanitize_email" />
+                <referencedFunction name="wp_remote_post" />
+                <referencedFunction name="is_wp_error" />
+                <referencedFunction name="wp_kses_post" />
+                <referencedFunction name="get_bloginfo" />
+                <referencedFunction name="admin_url" />
+                <referencedFunction name="plugin_dir_path" />
+                <referencedFunction name="__" />
+                <referencedFunction name="_e" />
+                <referencedFunction name="esc_html__" />
+                <referencedFunction name="esc_html_e" />
+            </errorLevel>
+        </UndefinedFunction>
+
+        <UndefinedConstant>
+            <errorLevel type="suppress">
+                <referencedConstant name="ABSPATH" />
+            </errorLevel>
+        </UndefinedConstant>
+
+        <MixedAssignment>
+            <errorLevel type="info" />
+        </MixedAssignment>
+
+        <MixedArgument>
+            <errorLevel type="info" />
+        </MixedArgument>
+
+        <MixedArrayAccess>
+            <errorLevel type="info" />
+        </MixedArrayAccess>
+    </issueHandlers>
+</psalm>
