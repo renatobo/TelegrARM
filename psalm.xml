@@ -50,11 +50,8 @@
             </errorLevel>
         </UndefinedFunction>
 
-        <UndefinedConstant>
-            <errorLevel type="suppress">
-                <referencedConstant name="ABSPATH" />
-            </errorLevel>
-        </UndefinedConstant>
+        <!-- Suppress undefined WordPress constants -->
+        <UndefinedConstant errorLevel="suppress" />
 
         <MixedAssignment>
             <errorLevel type="info" />
