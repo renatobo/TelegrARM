@@ -12,6 +12,8 @@ on:
 jobs:
   update-readme-stable-tag:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create and push tags
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repo

@@ -10,6 +10,8 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to upload release assets
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
