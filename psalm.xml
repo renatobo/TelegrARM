@@ -46,6 +46,7 @@
                 <referencedFunction name="_e" />
                 <referencedFunction name="esc_html__" />
                 <referencedFunction name="esc_html_e" />
+                <referencedFunction name="submit_button" />
             </errorLevel>
         </UndefinedFunction>
 
