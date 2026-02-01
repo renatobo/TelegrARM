@@ -47,6 +47,13 @@
                 <referencedFunction name="esc_html__" />
                 <referencedFunction name="esc_html_e" />
                 <referencedFunction name="submit_button" />
+                <referencedFunction name="add_options_page" />
+                <referencedFunction name="checked" />
+                <referencedFunction name="esc_textarea" />
+                <referencedFunction name="wp_json_encode" />
+                <referencedFunction name="wp_remote_retrieve_response_code" />
+                <referencedFunction name="maybe_unserialize" />
+                <referencedFunction name="get_user_meta" />
             </errorLevel>
         </UndefinedFunction>
 
