@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
+        with:
+          fetch-tags: true
 
       - name: Extract version from readme.txt
         id: extract_version
