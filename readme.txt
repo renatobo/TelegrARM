@@ -4,8 +4,8 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
 Tested up to: 6.8.1
 Requires PHP: 8.0
-Stable tag: 0.3.1
-Version: 0.3.1
+Stable tag: 0.4.0
+Version: 0.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,13 +24,14 @@ Key capabilities:
 - Configure separate Telegram channel/chat IDs per event type
 - Map ARMember fields to human-friendly labels using JSON
 - Optional Telegram contact card send on registration
-- Compatible with GitHub Updater for dashboard updates
+- Compatible with Git Updater release assets for dashboard updates
+- Versioned plugin ZIPs generated automatically by GitHub Actions
 
 == Installation ==
 
-1. Upload the plugin folder to `/wp-content/plugins/telegrarm/`.
+1. Upload the plugin folder to `/wp-content/plugins/TelegrARM/`.
 2. Activate **TelegrARM** in the WordPress admin.
-3. Go to **Settings > Telegram Bot**.
+3. Go to **Settings > TelegrARM**.
 4. Configure:
    - Telegram Bot API Token
    - Channel/chat ID for new users
@@ -55,19 +56,22 @@ Yes. Use **ARMember Keys Mapping (all fields)** in plugin settings to control wh
 Yes. Enable **Send contact on new user registration?**, then configure the phone field name and default international prefix.
 
 = Does this plugin support automatic updates from GitHub? =
-Yes. Install and activate GitHub Updater:
-https://github.com/afragen/github-updater
+Yes. Install and activate Git Updater:
+https://github.com/afragen/git-updater
 
 == Changelog ==
 
+= 0.4.0 =
+- Rebuilt the settings page with the same tabbed WordPress-admin layout used by eventon-apify.
+- Added Git Updater release-asset metadata so dashboard updates can use GitHub release ZIPs.
+- Added automated packaging and release workflows for version tags.
+
 = 0.3.1 =
-- Current stable release.
 - Telegram notifications for profile updates and new registrations.
 - Configurable ARMember mapping and per-event channel settings.
 - Optional contact send during registration.
 
 == Upgrade Notice ==
 
-= 0.3.1 =
-Recommended stable release.
-
+= 0.4.0 =
+Adds the redesigned settings UI and automated GitHub release packaging.

@@ -3,7 +3,7 @@
  * Plugin Name:       TelegrARM
  * Plugin URI:        https://github.com/renatobo/TelegrARM
  * Description:       Enable Telegram notifications for user profile updates and other ARMember events.
- * Version:           0.3.1
+ * Version:           0.4.0
  * Requires at least: 6.7
  * Requires PHP:      8.0
  * Author:            Renato Bonomini
@@ -14,7 +14,8 @@
  * Domain Path:       /languages
  *
  * GitHub Plugin URI: https://github.com/renatobo/TelegrARM
- * GitHub Branch:     main
+ * Primary Branch:    main
+ * Release Asset:     true
  *
  * @package           TelegrARM
  * @author            Renato Bonomini <https://github.com/renatobo>
@@ -28,24 +29,50 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('BONO_TELEGRARM_VERSION', '0.3.1');
+define('BONO_TELEGRARM_VERSION', '0.4.0');
 
 // Check PHP version requirement
 if (version_compare(PHP_VERSION, '8.0.0', '<')) {
-    // Show admin notice about PHP version
-    add_action('admin_notices', function() {
-        echo '<div class="notice notice-error"><p>';
-        echo '<strong>TelegrARM:</strong> This plugin requires PHP 8.0 or higher. ';
-        echo 'You are running PHP ' . esc_html(PHP_VERSION) . '. ';
-        echo 'Please upgrade your PHP version.';
-        echo '</p></div>';
-    });
-    // Don't load plugin functionality
+    add_action('admin_notices', 'telegrarm_php_version_notice');
     return;
 }
 
 // Load settings page
 require_once __DIR__ . '/telegrarm_settings.php';
+
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'telegrarm_add_plugin_action_links');
+
+/**
+ * Show an admin notice when PHP is too old for this plugin.
+ */
+function telegrarm_php_version_notice() {
+    echo '<div class="notice notice-error"><p>';
+    echo '<strong>TelegrARM:</strong> This plugin requires PHP 8.0 or higher. ';
+    echo 'You are running PHP ' . esc_html(PHP_VERSION) . '. ';
+    echo 'Please upgrade your PHP version.';
+    echo '</p></div>';
+}
+
+/**
+ * Add a Settings link on the Plugins screen.
+ *
+ * @param array<int, string> $links Existing action links.
+ * @return array<int, string>
+ */
+function telegrarm_add_plugin_action_links($links) {
+    $settings_url = admin_url('options-general.php?page=telegrarm_settings_page');
+
+    array_unshift(
+        $links,
+        sprintf(
+            '<a href="%s">%s</a>',
+            esc_url($settings_url),
+            esc_html__('Settings', 'telegrarm')
+        )
+    );
+
+    return $links;
+}
 
 /**
  * Initialize plugin hooks conditionally based on settings

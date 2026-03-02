@@ -1,44 +1,90 @@
 #!/bin/bash
 
-# Prompt for the new version
-read -p "Enter new version (e.g. 1.1.0): " VERSION
+set -euo pipefail
 
-# Validate version format: must be X.Y.Z
+VERSION="${1:-}"
+
+if [[ -z "$VERSION" ]]; then
+  read -r -p "Enter new version (e.g. 0.4.1): " VERSION
+fi
+
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "❌ Invalid version format. Use semantic versioning: X.Y.Z (e.g. 1.2.3)"
+  echo "Invalid version format. Use semantic versioning: X.Y.Z"
   exit 1
 fi
 
 TAG="v$VERSION"
 
-# Update version in readme.txt (both Stable tag and Version fields)
-sed -i '' "s/^Stable tag: .*/Stable tag: $VERSION/" readme.txt
-sed -i '' "s/^Version: .*/Version: $VERSION/" readme.txt
-
-# Update version in main plugin file (both comment header and constant)
-sed -i '' "s/^[[:space:]]*\**[[:space:]]*Version:[[:space:]]*.*/ * Version:           $VERSION/" telegrarm.php
-sed -i '' "s/define('BONO_TELEGRARM_VERSION',[[:space:]]*'[^']*')/define('BONO_TELEGRARM_VERSION', '$VERSION')/" telegrarm.php
-
-# Verify changes
-echo "🔍 Checking updated versions..."
-echo "readme.txt versions:"
-grep -E "^(Stable tag|Version):" readme.txt
-echo "telegrarm.php versions:"
-grep -E "(\* Version:|BONO_TELEGRARM_VERSION)" telegrarm.php
-
-# Git add and commit
-git add readme.txt telegrarm.php
-git commit -m "🔖 Bump version to $VERSION"
-git push origin main
-
-echo "✅ Version updated to $VERSION and pushed to main."
-echo "⏳ Waiting for GitHub Action to auto-tag version $TAG..."
-echo "👉 Monitor progress at: https://github.com/renatobo/TelegrARM/actions"
-
-# Create GitHub release using gh CLI
-if command -v gh &> /dev/null; then
-  CHANGELOG=$(git log "$(git describe --tags --abbrev=0)..HEAD" --pretty=format:"- %s" --no-merges)
-  gh release create "$TAG" --title "TelegrARM $VERSION" --notes "$CHANGELOG" || echo "⚠️ GitHub release creation failed or already exists."
-else
-  echo "⚠️ GitHub CLI (gh) not found. Skipping release creation."
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Working tree is not clean. Commit or stash changes before running a release."
+  exit 1
 fi
+
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  echo "Tag $TAG already exists."
+  exit 1
+fi
+
+update_file() {
+  local file_path="$1"
+  local search_pattern="$2"
+  local replacement="$3"
+  local tmp_file
+
+  tmp_file="$(mktemp)"
+  sed "s/${search_pattern}/${replacement}/" "$file_path" > "$tmp_file"
+  mv "$tmp_file" "$file_path"
+}
+
+extract_plugin_header_version() {
+  sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' "telegrarm.php" | head -n 1
+}
+
+extract_plugin_constant_version() {
+  sed -n "s/^define('BONO_TELEGRARM_VERSION', '\\(.*\\)');$/\\1/p" "telegrarm.php" | head -n 1
+}
+
+extract_stable_tag_version() {
+  sed -n 's/^Stable tag: //p' "readme.txt" | head -n 1
+}
+
+assert_versions_match() {
+  local header_version
+  local constant_version
+  local stable_tag_version
+
+  header_version="$(extract_plugin_header_version)"
+  constant_version="$(extract_plugin_constant_version)"
+  stable_tag_version="$(extract_stable_tag_version)"
+
+  if [[ "$header_version" != "$VERSION" || "$constant_version" != "$VERSION" || "$stable_tag_version" != "$VERSION" ]]; then
+    echo "Version mismatch detected after update:"
+    echo "  Plugin header: ${header_version:-missing}"
+    echo "  BONO_TELEGRARM_VERSION: ${constant_version:-missing}"
+    echo "  Stable tag: ${stable_tag_version:-missing}"
+    echo "Expected all three to equal $VERSION."
+    exit 1
+  fi
+}
+
+update_file "readme.txt" "^Stable tag: .*" "Stable tag: $VERSION"
+update_file "readme.txt" "^Version: .*" "Version: $VERSION"
+update_file "telegrarm.php" "^[[:space:]]*\\*[[:space:]]*Version:[[:space:]]*.*" " * Version:           $VERSION"
+update_file "telegrarm.php" "^define('BONO_TELEGRARM_VERSION', '.*');$" "define('BONO_TELEGRARM_VERSION', '$VERSION');"
+
+assert_versions_match
+
+git add readme.txt telegrarm.php
+git commit -m "Bump version to $VERSION"
+git tag -a "$TAG" -m "Release $VERSION"
+git push origin main
+git push origin "$TAG"
+
+cat <<EOF
+Release prepared for $TAG.
+
+GitHub Actions will now:
+- build the WordPress plugin zip with ./build.sh
+- create or update the GitHub Release for $TAG
+- attach the generated versioned zip asset
+EOF

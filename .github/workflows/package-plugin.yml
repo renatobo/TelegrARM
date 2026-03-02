@@ -1,4 +1,4 @@
-name: Build Release Zip
+name: Release Plugin Zip
 
 on:
   push:
@@ -9,21 +9,29 @@ jobs:
   zip:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required to upload release assets
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Prepare plugin folder
+      - name: Build plugin package
+        id: build
         run: |
-          mkdir telegrarm
-          cp -r *.php readme.txt LICENSE telegrarm/
+          chmod +x build.sh
+          ZIP_PATH="$(./build.sh | sed -n 's/^Created //p')"
+          if [[ -z "$ZIP_PATH" || ! -f "$ZIP_PATH" ]]; then
+            echo "Failed to locate built zip file."
+            exit 1
+          fi
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Zip it
-        run: zip -r telegrarm.zip telegrarm
-
-      - name: Upload release asset
+      - name: Create GitHub release and upload asset
         uses: softprops/action-gh-release@v2
         with:
-          files: telegrarm.zip
-
+          files: ${{ steps.build.outputs.zip_path }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -50,7 +50,7 @@ Each notification type is implemented in a separate file and loaded only when en
 Plugin settings are stored in WordPress options table with the `telegrarm_` prefix:
 - `telegrarm_profile_update` - Enable/disable profile update notifications
 - `telegrarm_after_new_user_notification` - Enable/disable new user notifications
-- `telegrarm_bot_token` - Telegram Bot API token
+- `telegram_bot_api_token` - Telegram Bot API token
 - Additional settings for channel IDs and field mappings
 
 ## Telegram API Integration
@@ -95,6 +95,7 @@ The plugin communicates with Telegram's Bot API to send formatted notifications.
 Update in three places:
 1. Plugin header in [telegrarm.php](telegrarm.php#L7)
 2. `BONO_TELEGRARM_VERSION` constant in [telegrarm.php](telegrarm.php#L24)
+3. `Stable tag` in [readme.txt](readme.txt)
 
 ### Adding Settings
 1. Register option in `telegrarm_settings.php`
@@ -111,8 +112,10 @@ Update in three places:
 ## Release Process
 
 The plugin uses GitHub Actions for automated releases:
-- Builds release ZIP on version tags
-- Updates `stable` tag for GitHub Updater compatibility
+- `./build.sh` creates a versioned WordPress plugin ZIP
+- `./release.sh x.y.z` syncs version metadata, commits the bump, and pushes the version tag
+- pushing `v*` tags builds the ZIP and attaches it to the GitHub Release
+- the plugin header advertises `Primary Branch` and `Release Asset` for Git Updater compatibility
 - See [.github/workflows/](.github/workflows/) for automation details
 
 ## External Resources

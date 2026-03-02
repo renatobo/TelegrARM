@@ -1,7 +1,7 @@
 # TelegrARM
 [![WordPress](https://img.shields.io/badge/WordPress-6.7%2B-21759b)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4)](https://www.php.net/)
-[![Version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/renatobo/TelegrARM/releases)
+[![Release](https://img.shields.io/github/v/release/renatobo/TelegrARM?label=release)](https://github.com/renatobo/TelegrARM/releases)
 [![Psalm](https://github.com/renatobo/TelegrARM/actions/workflows/psalm.yml/badge.svg?branch=main)](https://github.com/renatobo/TelegrARM/actions/workflows/psalm.yml)
 [![License: GPL v2 or later](https://img.shields.io/badge/License-GPL%20v2%20or%20later-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 
@@ -17,7 +17,8 @@ WordPress plugin for ARMember that sends Telegram notifications for selected use
 - Configurable ARMember key-to-label mapping (JSON)
 - Optional contact push on registration (`sendContact`) with phone normalization
 - Conditional hook loading (only enabled handlers are attached)
-- GitHub-based update compatibility via [GitHub Updater](https://github.com/afragen/github-updater)
+- Git Updater-compatible release assets for dashboard updates
+- Versioned release ZIPs built automatically by GitHub Actions
 
 ## Why TelegrARM
 
@@ -34,9 +35,9 @@ If you already use ARMember and Telegram internally, TelegrARM provides a simple
 ## Installation
 
 1. Copy this plugin into your WordPress plugins directory:
-   - `/wp-content/plugins/telegrarm`
+   - `/wp-content/plugins/TelegrARM`
 2. Activate **TelegrARM** in **Plugins**.
-3. Go to **Settings > Telegram Bot**.
+3. Go to **Settings > TelegrARM**.
 4. Configure:
    - Telegram Bot API token
    - Channel/chat ID for new user notifications
@@ -52,7 +53,7 @@ If you already use ARMember and Telegram internally, TelegrARM provides a simple
 3. Copy the generated bot token.
 4. Add the bot to your target channel/group.
 5. Grant permission to post messages.
-6. Paste token/channel IDs into **Settings > Telegram Bot**.
+6. Paste token/channel IDs into **Settings > TelegrARM**.
 
 Reference: [Telegram Bot documentation](https://core.telegram.org/bots/tutorial#introduction)
 
@@ -83,9 +84,37 @@ Special handling already included:
 
 ## Automatic Updates
 
-TelegrARM includes GitHub metadata headers and supports dashboard updates via [GitHub Updater](https://github.com/afragen/github-updater).
+TelegrARM includes the metadata Git Updater expects, including `Primary Branch` and `Release Asset`, so the plugin can update from GitHub release ZIPs through the WordPress dashboard when [Git Updater](https://github.com/afragen/git-updater) is installed.
 
 Repository: [renatobo/TelegrARM](https://github.com/renatobo/TelegrARM)
+
+## Packaging
+
+Build an installable plugin ZIP from the repo root:
+
+```bash
+./build.sh
+```
+
+That creates a file like `TelegrARM-x.y.z.zip` in the project root, ready to upload in **Plugins > Add New > Upload Plugin**.
+
+## Releases
+
+To publish a GitHub release with the WordPress-ready ZIP attached:
+
+```bash
+./release.sh x.y.z
+```
+
+That script:
+
+- updates the plugin version in `telegrarm.php`
+- updates the stable tag in `readme.txt`
+- commits the version bump
+- creates and pushes the git tag `vx.y.z`
+- verifies that the plugin header, `BONO_TELEGRARM_VERSION`, and `Stable tag` all match
+
+Pushing the tag triggers GitHub Actions, which runs `./build.sh`, creates or updates the GitHub Release for that tag, and uploads the generated ZIP asset automatically.
 
 ## Security
 
@@ -104,7 +133,8 @@ Please review [SECURITY.md](./SECURITY.md) for vulnerability reporting and harde
 ### CI
 
 - Psalm static analysis workflow on push/PR to `main`
-- Release zip workflow for `v*` tags
+- Automatic stable tag workflow on `main` when `readme.txt` changes version
+- Release ZIP workflow for `v*` tags
 
 ## License
 
