@@ -4,8 +4,8 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
 Tested up to: 6.8.1
 Requires PHP: 8.0
-Stable tag: 0.4.0
-Version: 0.4.0
+Stable tag: 0.4.1
+Version: 0.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,10 @@ https://github.com/afragen/git-updater
 
 == Changelog ==
 
+= 0.4.1 =
+- Limited release ZIP contents to the files required by the plugin on a WordPress site.
+- Added local WordPress Psalm stubs so static analysis passes without bundling development-only files in releases.
+
 = 0.4.0 =
 - Rebuilt the settings page with the same tabbed WordPress-admin layout used by eventon-apify.
 - Added Git Updater release-asset metadata so dashboard updates can use GitHub release ZIPs.
@@ -72,6 +76,9 @@ https://github.com/afragen/git-updater
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.4.1 =
+Keeps release ZIPs WordPress-ready by shipping only runtime plugin files.
 
 = 0.4.0 =
 Adds the redesigned settings UI and automated GitHub release packaging.

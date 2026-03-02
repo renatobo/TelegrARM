@@ -23,6 +23,14 @@ OUTPUT_NAME="${PLUGIN_SLUG}-${VERSION}.zip"
 OUTPUT_PATH="$PWD/$OUTPUT_NAME"
 STAGING_DIR="$(mktemp -d)"
 PACKAGE_DIR="$STAGING_DIR/$PLUGIN_SLUG"
+PACKAGE_PATHS=(
+  "telegrarm.php"
+  "telegrarm_settings.php"
+  "telegrarm_after_new_user_notification.php"
+  "telegrarm_update_profile_external.php"
+  "uninstall.php"
+  "assets/telegrarm-settings-banner.svg"
+)
 
 cleanup() {
   rm -rf "$STAGING_DIR"
@@ -32,16 +40,16 @@ trap cleanup EXIT
 
 mkdir -p "$PACKAGE_DIR"
 
-rsync -a \
-  --exclude '.git/' \
-  --exclude '.github/' \
-  --exclude '.DS_Store' \
-  --exclude '*.zip' \
-  --exclude '.gitignore' \
-  --exclude 'build.sh' \
-  --exclude 'release.sh' \
-  --exclude 'ui.md' \
-  ./ "$PACKAGE_DIR/"
+for relative_path in "${PACKAGE_PATHS[@]}"; do
+  if [[ ! -e "$relative_path" ]]; then
+    echo "Missing package path: $relative_path"
+    exit 1
+  fi
+
+  destination_dir="$PACKAGE_DIR/$(dirname "$relative_path")"
+  mkdir -p "$destination_dir"
+  cp -pR "$relative_path" "$destination_dir/"
+done
 
 (
   cd "$STAGING_DIR"
