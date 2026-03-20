@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TOOLS_DIR="$ROOT_DIR/.tools/psalm"
+PSALM_PHAR="$TOOLS_DIR/psalm.phar"
+PSALM_URL="https://github.com/vimeo/psalm/releases/latest/download/psalm.phar"
+
+mkdir -p "$TOOLS_DIR"
+
+if [[ ! -f "$PSALM_PHAR" ]]; then
+  echo "Downloading Psalm to $PSALM_PHAR"
+  curl -fsSL "$PSALM_URL" -o "$PSALM_PHAR"
+  chmod +x "$PSALM_PHAR"
+fi
+
+exec php "$PSALM_PHAR" --config="$ROOT_DIR/psalm.xml" "$@"

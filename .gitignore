@@ -50,3 +50,6 @@ wp-config.php
 
 # Claude Code directory
 .claude/
+
+# Local tool cache
+.tools/
