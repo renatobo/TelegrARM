@@ -4,8 +4,8 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
 Tested up to: 6.8.1
 Requires PHP: 8.0
-Stable tag: 0.4.1
-Version: 0.4.1
+Stable tag: 0.4.2
+Version: 0.4.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,11 @@ https://github.com/afragen/git-updater
 
 == Changelog ==
 
+= 0.4.2 =
+- Hardened Telegram notification handlers against HTML injection from user-supplied profile values.
+- Removed noisy Telegram failure paths so malformed hook payloads and missing configuration fail quietly under `WP_DEBUG`.
+- Expanded release packaging to include `readme.txt` and `LICENSE`.
+
 = 0.4.1 =
 - Limited release ZIP contents to the files required by the plugin on a WordPress site.
 - Added local WordPress Psalm stubs so static analysis passes without bundling development-only files in releases.
@@ -76,6 +81,9 @@ https://github.com/afragen/git-updater
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.4.2 =
+Hardens Telegram message handling and includes the plugin readme/license in release packages.
 
 = 0.4.1 =
 Keeps release ZIPs WordPress-ready by shipping only runtime plugin files.
