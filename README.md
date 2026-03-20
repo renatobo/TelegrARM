@@ -104,7 +104,7 @@ Build an installable plugin ZIP from the repo root:
 ./build.sh
 ```
 
-That creates a file like `TelegrARM-x.y.z.zip` in the project root, ready to upload in **Plugins > Add New > Upload Plugin**.
+That creates a file like `TelegrARM-vx.y.z.zip` in the project root, ready to upload in **Plugins > Add New > Upload Plugin**.
 The archive includes only the plugin files needed on a WordPress site, excludes shell scripts, and keeps only `README.md` from markdown documentation files.
 
 ## Releases
