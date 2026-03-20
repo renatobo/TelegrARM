@@ -32,6 +32,7 @@ PACKAGE_PATHS=(
   "telegrarm_after_new_user_notification.php"
   "telegrarm_update_profile_external.php"
   "uninstall.php"
+  "assets/icon.svg"
   "assets/telegrarm-settings-banner.svg"
 )
 

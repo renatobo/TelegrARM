@@ -8,6 +8,14 @@ Guidance for coding agents working in this repository.
 - Type: WordPress plugin (PHP)
 - Purpose: Send Telegram notifications for selected ARMember events.
 
+## Distribution Strategy
+
+- Primary distribution channel: GitHub releases + Git Updater.
+- Secondary distribution channel: WordPress.org plugin directory.
+- Preserve Git Updater metadata in `telegrarm.php` (`GitHub Plugin URI`, `Primary Branch`, `Release Asset`) unless the user explicitly asks to remove or replace it.
+- Preserve Git Updater-facing admin/UI copy in `telegrarm_settings.php` and GitHub distribution guidance in `README.md`.
+- Keep `readme.txt` valid for WordPress.org submission, but do not treat WordPress.org as the primary source of truth unless the user explicitly changes that direction.
+
 ## Key Files
 
 - `telegrarm.php`: Plugin bootstrap, metadata, conditional hook loading.
@@ -38,7 +46,7 @@ Guidance for coding agents working in this repository.
 1. Add/adjust options in `telegrarm_settings.php`.
 2. Register hooks conditionally in `telegrarm.php`.
 3. Add/update dedicated handler file(s).
-4. Update docs (`README.md` and `readme.txt`).
+4. Update docs (`README.md` for GitHub-primary distribution and `readme.txt` for WordPress.org compatibility).
 5. Ensure uninstall behavior remains correct.
 
 ## Versioning and Release Notes
@@ -46,7 +54,10 @@ Guidance for coding agents working in this repository.
 - Keep plugin version aligned in:
   - `telegrarm.php` plugin header
   - `BONO_TELEGRARM_VERSION` constant
-  - `readme.txt` (`Stable tag` and changelog)
+  - `readme.txt` (`Stable tag`, `Version`, and changelog)
+- When preparing releases, keep both distribution channels coherent:
+  - GitHub release/update behavior should continue to work through Git Updater metadata and release assets.
+  - WordPress.org submission metadata should remain valid in `readme.txt`.
 
 ## Validation Checklist
 
@@ -55,6 +66,7 @@ Guidance for coding agents working in this repository.
 - Telegram bot token and channel IDs are used from options.
 - No PHP warnings/notices in typical flows.
 - Static analysis passes (`psalm`).
+- Git Updater metadata and admin copy remain intact unless intentionally changed.
 
 ## CI/Automation
 

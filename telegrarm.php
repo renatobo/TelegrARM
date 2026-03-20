@@ -3,7 +3,7 @@
  * Plugin Name:       TelegrARM
  * Plugin URI:        https://github.com/renatobo/TelegrARM
  * Description:       Enable Telegram notifications for user profile updates and other ARMember events.
- * Version:           0.4.2
+ * Version:           0.4.4
  * Requires at least: 6.7
  * Requires PHP:      8.0
  * Author:            Renato Bonomini
@@ -29,7 +29,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('BONO_TELEGRARM_VERSION', '0.4.2');
+define('BONO_TELEGRARM_VERSION', '0.4.4');
 
 // Check PHP version requirement
 if (version_compare(PHP_VERSION, '8.0.0', '<')) {
@@ -41,15 +41,21 @@ if (version_compare(PHP_VERSION, '8.0.0', '<')) {
 require_once __DIR__ . '/telegrarm_settings.php';
 
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'telegrarm_add_plugin_action_links');
+add_action('plugins_loaded', 'telegrarm_load_textdomain', 5);
 
 /**
  * Show an admin notice when PHP is too old for this plugin.
  */
 function telegrarm_php_version_notice() {
     echo '<div class="notice notice-error"><p>';
-    echo '<strong>TelegrARM:</strong> This plugin requires PHP 8.0 or higher. ';
-    echo 'You are running PHP ' . esc_html(PHP_VERSION) . '. ';
-    echo 'Please upgrade your PHP version.';
+    echo '<strong>' . esc_html__('TelegrARM:', 'telegrarm') . '</strong> ';
+    /* translators: %s: current PHP version */
+    echo esc_html(
+        sprintf(
+            __('This plugin requires PHP 8.0 or higher. You are running PHP %s. Please upgrade your PHP version.', 'telegrarm'),
+            PHP_VERSION
+        )
+    );
     echo '</p></div>';
 }
 
@@ -72,6 +78,15 @@ function telegrarm_add_plugin_action_links($links) {
     );
 
     return $links;
+}
+
+/**
+ * Load the plugin text domain.
+ *
+ * @return void
+ */
+function telegrarm_load_textdomain() {
+    load_plugin_textdomain('telegrarm', false, dirname(plugin_basename(__FILE__)) . '/languages');
 }
 
 /**

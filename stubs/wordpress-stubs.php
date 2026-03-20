@@ -91,6 +91,10 @@ function plugins_url(string $path = '', string $plugin = ''): string {
     return $path;
 }
 
+function load_plugin_textdomain(string $domain, bool $deprecated = false, string $plugin_rel_path = ''): bool {
+    return true;
+}
+
 function __(string $text, string $domain = 'default'): string {
     return $text;
 }
@@ -131,6 +135,17 @@ function wp_json_encode($value, int $flags = 0, int $depth = 512): string|false 
  */
 function wp_remote_retrieve_response_code($response): int|string {
     return 200;
+}
+
+/**
+ * @param array<string, mixed>|WP_Error $response
+ */
+function wp_remote_retrieve_body($response): string {
+    return '';
+}
+
+function wp_http_validate_url(string $url): string|false {
+    return $url;
 }
 
 /**

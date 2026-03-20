@@ -9,6 +9,10 @@
  * @license GPLv2 or later
  */
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 if (!function_exists('telegrarm_escape_telegram_html_text')) {
     /**
      * Escape plain text for Telegram HTML parse mode.

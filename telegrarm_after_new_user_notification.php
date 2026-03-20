@@ -3,6 +3,10 @@
  * Notify on new user registration.
  */
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Escape plain text for Telegram HTML parse mode.
  *

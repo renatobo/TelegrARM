@@ -57,6 +57,14 @@ If you already use ARMember and Telegram internally, TelegrARM provides a simple
 
 Reference: [Telegram Bot documentation](https://core.telegram.org/bots/tutorial#introduction)
 
+## External Services
+
+TelegrARM connects to the Telegram Bot API when enabled ARMember events fire.
+
+- Data sent to Telegram includes the configured destination chat ID, notification text built from mapped ARMember profile fields, and optional contact data when contact sending is enabled.
+- Telegram terms of service: [telegram.org/tos](https://telegram.org/tos)
+- Telegram privacy policy: [telegram.org/privacy](https://telegram.org/privacy)
+
 ## ARMember Field Mapping Example
 
 Use JSON in **ARMember Keys Mapping (all fields)** to whitelist and label profile keys:
@@ -97,7 +105,7 @@ Build an installable plugin ZIP from the repo root:
 ```
 
 That creates a file like `TelegrARM-x.y.z.zip` in the project root, ready to upload in **Plugins > Add New > Upload Plugin**.
-The archive includes only the files required on a WordPress site, not repository docs or development tooling.
+The archive includes only the plugin files needed on a WordPress site, excludes shell scripts, and keeps only `README.md` from markdown documentation files.
 
 ## Releases
 
@@ -111,11 +119,17 @@ That script:
 
 - updates the plugin version in `telegrarm.php`
 - updates the stable tag in `readme.txt`
+- updates the `Version` field in `readme.txt`
 - commits the version bump
 - creates and pushes the git tag `vx.y.z`
-- verifies that the plugin header, `BONO_TELEGRARM_VERSION`, and `Stable tag` all match
+- verifies that the plugin header, `BONO_TELEGRARM_VERSION`, `Stable tag`, and `readme.txt` `Version` all match
 
 Pushing the tag triggers GitHub Actions, which runs `./build.sh`, creates or updates the GitHub Release for that tag, and uploads the generated ZIP asset automatically.
+
+## Related Repositories
+
+- [WebHookARM](https://github.com/renatobo/WebHookARM)
+- [bono_arm_api](https://github.com/renatobo/bono_arm_api)
 
 ## Security
 

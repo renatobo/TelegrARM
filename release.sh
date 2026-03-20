@@ -5,7 +5,7 @@ set -euo pipefail
 VERSION="${1:-}"
 
 if [[ -z "$VERSION" ]]; then
-  read -r -p "Enter new version (e.g. 0.4.1): " VERSION
+  read -r -p "Enter new version (e.g. 0.4.4): " VERSION
 fi
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -48,21 +48,28 @@ extract_stable_tag_version() {
   sed -n 's/^Stable tag: //p' "readme.txt" | head -n 1
 }
 
+extract_readme_version() {
+  sed -n 's/^Version: //p' "readme.txt" | head -n 1
+}
+
 assert_versions_match() {
   local header_version
   local constant_version
   local stable_tag_version
+  local readme_version
 
   header_version="$(extract_plugin_header_version)"
   constant_version="$(extract_plugin_constant_version)"
   stable_tag_version="$(extract_stable_tag_version)"
+  readme_version="$(extract_readme_version)"
 
-  if [[ "$header_version" != "$VERSION" || "$constant_version" != "$VERSION" || "$stable_tag_version" != "$VERSION" ]]; then
+  if [[ "$header_version" != "$VERSION" || "$constant_version" != "$VERSION" || "$stable_tag_version" != "$VERSION" || "$readme_version" != "$VERSION" ]]; then
     echo "Version mismatch detected after update:"
     echo "  Plugin header: ${header_version:-missing}"
     echo "  BONO_TELEGRARM_VERSION: ${constant_version:-missing}"
     echo "  Stable tag: ${stable_tag_version:-missing}"
-    echo "Expected all three to equal $VERSION."
+    echo "  Readme version: ${readme_version:-missing}"
+    echo "Expected all four to equal $VERSION."
     exit 1
   fi
 }

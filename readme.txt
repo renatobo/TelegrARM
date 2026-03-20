@@ -2,10 +2,10 @@
 Contributors: renatobo
 Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
-Tested up to: 6.9.4
+Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.4.2
-Version: 0.4.2
+Stable tag: 0.4.4
+Version: 0.4.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,8 +24,12 @@ Key capabilities:
 - Configure separate Telegram channel/chat IDs per event type
 - Map ARMember fields to human-friendly labels using JSON
 - Optional Telegram contact card send on registration
-- Compatible with Git Updater release assets for dashboard updates
-- Versioned plugin ZIPs generated automatically by GitHub Actions
+
+External services:
+- This plugin connects to the Telegram Bot API to send notifications when enabled ARMember events fire.
+- Data sent to Telegram includes the configured destination chat ID, the notification text built from mapped ARMember profile fields, and optional contact data when contact sending is enabled.
+- Telegram terms of service: https://telegram.org/tos
+- Telegram privacy policy: https://telegram.org/privacy
 
 == Installation ==
 
@@ -55,11 +59,21 @@ Yes. Use **ARMember Keys Mapping (all fields)** in plugin settings to control wh
 = Can I send user contact info on registration? =
 Yes. Enable **Send contact on new user registration?**, then configure the phone field name and default international prefix.
 
-= Does this plugin support automatic updates from GitHub? =
-Yes. Install and activate Git Updater:
-https://github.com/afragen/git-updater
+= Does this plugin use an external service? =
+Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 0.4.4 =
+- Finalized dual-distribution release metadata so GitHub plus Git Updater remains the primary channel while WordPress.org stays submission-ready as a secondary channel.
+- Added plugin text-domain loading, handler direct-access guards, and WordPress HTTP Psalm stubs for cleaner runtime and CI behavior.
+- Updated release and agent documentation to keep versioning and distribution rules consistent.
+
+= 0.4.3 =
+- Added direct-access guards to the notification handler files for WordPress.org review readiness.
+- Added explicit Telegram external-service disclosure for WordPress.org submission.
+- Kept Git Updater metadata and admin links for GitHub-based update flows alongside WordPress.org submission prep.
+- Added missing WordPress HTTP stubs so Psalm passes in CI.
 
 = 0.4.2 =
 - Hardened Telegram notification handlers against HTML injection from user-supplied profile values.
@@ -81,6 +95,12 @@ https://github.com/afragen/git-updater
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.4.4 =
+Refines the plugin for the GitHub-first, WordPress.org-secondary release flow and bundles the related hardening/documentation updates.
+
+= 0.4.3 =
+Prepares the plugin for WordPress.org directory submission and hardens review-facing packaging details.
 
 = 0.4.2 =
 Hardens Telegram message handling and includes the plugin readme/license in release packages.
