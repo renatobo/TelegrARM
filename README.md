@@ -109,13 +109,17 @@ The archive includes only the plugin files needed on a WordPress site, excludes 
 
 ## Releases
 
-To publish a GitHub release with the WordPress-ready ZIP attached:
+The release badge above reflects the latest published GitHub Release, not just the latest git tag.
+
+Use one of these explicit release paths to publish a WordPress-ready ZIP:
+
+### Local release path
 
 ```bash
 ./release.sh x.y.z
 ```
 
-That script:
+This is the primary operator workflow. It:
 
 - updates the plugin version in `telegrarm.php`
 - updates the stable tag in `readme.txt`
@@ -125,6 +129,17 @@ That script:
 - verifies that the plugin header, `BONO_TELEGRARM_VERSION`, `Stable tag`, and `readme.txt` `Version` all match
 
 Pushing the tag triggers GitHub Actions, which runs `./build.sh`, creates or updates the GitHub Release for that tag, and uploads the generated ZIP asset automatically.
+
+### Manual GitHub Actions path
+
+Use the **Manual Release** workflow with a `version` input when you want GitHub Actions to perform an explicit release without relying on a separate tag-push workflow.
+
+The manual workflow:
+
+- validates that `telegrarm.php` and `readme.txt` already match the requested version
+- reuses the existing `vx.y.z` tag or creates it if it does not exist
+- runs `./build.sh`
+- creates or updates the GitHub Release and uploads the generated ZIP asset
 
 ## Related Repositories
 
@@ -148,7 +163,7 @@ Please review [SECURITY.md](./SECURITY.md) for vulnerability reporting and harde
 ### CI
 
 - Psalm static analysis workflow on push/PR to `main`
-- Automatic stable tag workflow on `main` when `readme.txt` changes version
+- Manual release workflow for explicit GitHub Actions-driven releases
 - Release ZIP workflow for `v*` tags
 
 ## License

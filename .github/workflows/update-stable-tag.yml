@@ -1,57 +1,86 @@
-name: Tag Stable Version
+name: Manual Release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version number to tag (e.g. 0.4.1)'
+        description: 'Version number to release (e.g. 0.4.4)'
         required: true
         type: string
 
 jobs:
-  update-readme-stable-tag:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Determine version
         id: extract_version
         run: |
           set -e
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=$(grep -E '^Stable tag:' readme.txt | awk '{print $3}')
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format: $VERSION"
+            exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check if tag already exists
-        id: check_tag
+      - name: Validate version metadata
         run: |
           set -e
           VERSION=${{ steps.extract_version.outputs.version }}
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists."
-            echo "tag_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          HEADER_VERSION="$(sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' telegrarm.php | head -n 1)"
+          CONSTANT_VERSION="$(sed -n "s/^define('BONO_TELEGRARM_VERSION', '\(.*\)');$/\1/p" telegrarm.php | head -n 1)"
+          STABLE_TAG_VERSION="$(sed -n 's/^Stable tag: //p' readme.txt | head -n 1)"
+          README_VERSION="$(sed -n 's/^Version: //p' readme.txt | head -n 1)"
+
+          if [[ "$HEADER_VERSION" != "$VERSION" || "$CONSTANT_VERSION" != "$VERSION" || "$STABLE_TAG_VERSION" != "$VERSION" || "$README_VERSION" != "$VERSION" ]]; then
+            echo "Version metadata does not match requested release version $VERSION."
+            echo "Plugin header: ${HEADER_VERSION:-missing}"
+            echo "BONO_TELEGRARM_VERSION: ${CONSTANT_VERSION:-missing}"
+            echo "Stable tag: ${STABLE_TAG_VERSION:-missing}"
+            echo "Readme version: ${README_VERSION:-missing}"
+            exit 1
           fi
 
-      - name: Tag new version
-        if: steps.check_tag.outputs.tag_exists == 'false'
+      - name: Ensure release tag exists
         run: |
           set -e
           VERSION=${{ steps.extract_version.outputs.version }}
+          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists."
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v$VERSION"
+          git tag -a "v$VERSION" -m "Release $VERSION"
           git push origin "v$VERSION"
+
+      - name: Build plugin package
+        id: build
+        run: |
+          chmod +x build.sh
+          ZIP_PATH="$(./build.sh | sed -n 's/^Created //p')"
+          if [[ -z "$ZIP_PATH" || ! -f "$ZIP_PATH" ]]; then
+            echo "Failed to locate built zip file."
+            exit 1
+          fi
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release and upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.extract_version.outputs.version }}
+          files: ${{ steps.build.outputs.zip_path }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
