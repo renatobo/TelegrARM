@@ -12,6 +12,10 @@ Guidance for coding agents working in this repository.
 
 - Primary distribution channel: GitHub releases + Git Updater.
 - Secondary distribution channel: WordPress.org plugin directory.
+- Release tagging is explicit only. Do not reintroduce automatic tag creation on `main`.
+- Supported release paths are:
+  - local/manual via `./release.sh x.y.z`
+  - manual GitHub Actions via the `Manual Release` workflow (`workflow_dispatch`)
 - Preserve Git Updater metadata in `telegrarm.php` (`GitHub Plugin URI`, `Primary Branch`, `Release Asset`) unless the user explicitly asks to remove or replace it.
 - Preserve Git Updater-facing admin/UI copy in `telegrarm_settings.php` and GitHub distribution guidance in `README.md`.
 - Keep `readme.txt` valid for WordPress.org submission, but do not treat WordPress.org as the primary source of truth unless the user explicitly changes that direction.
@@ -58,6 +62,8 @@ Guidance for coding agents working in this repository.
 - When preparing releases, keep both distribution channels coherent:
   - GitHub release/update behavior should continue to work through Git Updater metadata and release assets.
   - WordPress.org submission metadata should remain valid in `readme.txt`.
+- The latest published GitHub Release, not the latest tag alone, drives the README release badge.
+- The `Manual Release` workflow must validate version metadata before publishing or updating a GitHub Release.
 
 ## Validation Checklist
 
@@ -66,11 +72,14 @@ Guidance for coding agents working in this repository.
 - Telegram bot token and channel IDs are used from options.
 - No PHP warnings/notices in typical flows.
 - Static analysis passes (`psalm`).
+- GitHub Release publishing still works for both explicit release paths.
 - Git Updater metadata and admin copy remain intact unless intentionally changed.
 
 ## CI/Automation
 
 - Psalm workflow runs on push/PR to `main`.
+- CodeQL is repo-managed through `.github/workflows/codeql.yml`, not GitHub default setup.
+- Manual GitHub release publishing runs through `.github/workflows/update-stable-tag.yml` (`Manual Release`).
 - Release zip is built on `v*` tags.
 
 ## References

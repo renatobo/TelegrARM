@@ -163,6 +163,7 @@ Please review [SECURITY.md](./SECURITY.md) for vulnerability reporting and harde
 ### CI
 
 - Psalm static analysis workflow on push/PR to `main`
+- Repo-managed CodeQL workflow on push/PR to `main` plus a weekly schedule
 - Manual release workflow for explicit GitHub Actions-driven releases
 - Release ZIP workflow for `v*` tags
 
