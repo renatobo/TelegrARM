@@ -117,7 +117,24 @@ if (!function_exists('telegrarm_get_telegram_error_message')) {
  * @return void
  */
 function telegrarm_after_new_user_notification($user) {
+    telegrarm_log_debug_message(
+        'New-user handler received event.',
+        array(
+            'has_object' => is_object($user),
+            'user_id'    => is_object($user) && isset($user->ID) ? (int) $user->ID : null,
+        )
+    );
+
     if (!is_object($user) || !isset($user->ID, $user->user_login)) {
+        telegrarm_log_debug_message(
+            'New-user handler skipped: invalid payload.',
+            array(
+                'has_object' => is_object($user),
+                'has_id'     => is_object($user) && isset($user->ID),
+                'has_login'  => is_object($user) && isset($user->user_login),
+            )
+        );
+
         return;
     }
 
@@ -126,6 +143,15 @@ function telegrarm_after_new_user_notification($user) {
     $arm_allowed_keys = get_option('telegrarm_arm_mapping', array());
 
     if ('' === $bot_api_token || '' === $channel_id || !is_array($arm_allowed_keys)) {
+        telegrarm_log_debug_message(
+            'New-user handler skipped: missing configuration.',
+            array(
+                'bot_token_set'   => '' !== $bot_api_token,
+                'channel_id_set'   => '' !== $channel_id,
+                'mapping_is_array' => is_array($arm_allowed_keys),
+            )
+        );
+
         return;
     }
 
@@ -164,10 +190,32 @@ function telegrarm_after_new_user_notification($user) {
     $result = wp_remote_post($url, array('body' => $post_data));
 
     if (is_wp_error($result)) {
+        telegrarm_log_debug_message(
+            'New-user Telegram message request failed.',
+            array(
+                'action' => 'sendMessage',
+                'error'  => $result->get_error_message(),
+                'code'   => $result->get_error_code(),
+            )
+        );
+
         return;
     }
 
-    if (200 !== wp_remote_retrieve_response_code($result)) {
+    $telegram_response = telegrarm_get_telegram_response_details($result);
+
+    if (200 !== $telegram_response['status_code'] || true !== $telegram_response['ok']) {
+        telegrarm_log_debug_message(
+            'New-user Telegram message request was unsuccessful.',
+            array(
+                'action'      => 'sendMessage',
+                'status_code' => $telegram_response['status_code'],
+                'telegram_ok' => $telegram_response['ok'],
+                'error_code'  => $telegram_response['error_code'],
+                'description' => $telegram_response['description'],
+            )
+        );
+
         return;
     }
 
@@ -186,6 +234,13 @@ function telegrarm_after_new_user_notification($user) {
     }
 
     if ('' === $phone) {
+        telegrarm_log_debug_message(
+            'New-user contact card skipped: phone number missing.',
+            array(
+                'phone_field_name' => $phone_field_name,
+            )
+        );
+
         return;
     }
 
@@ -198,5 +253,33 @@ function telegrarm_after_new_user_notification($user) {
         'last_name'    => isset($meta['last_name']) && is_scalar($meta['last_name']) ? (string) $meta['last_name'] : '',
     );
 
-    wp_remote_post($url, array('body' => $post_data));
+    $result = wp_remote_post($url, array('body' => $post_data));
+
+    if (is_wp_error($result)) {
+        telegrarm_log_debug_message(
+            'New-user contact request failed.',
+            array(
+                'action' => 'sendContact',
+                'error'  => $result->get_error_message(),
+                'code'   => $result->get_error_code(),
+            )
+        );
+
+        return;
+    }
+
+    $telegram_response = telegrarm_get_telegram_response_details($result);
+
+    if (200 !== $telegram_response['status_code'] || true !== $telegram_response['ok']) {
+        telegrarm_log_debug_message(
+            'New-user contact request was unsuccessful.',
+            array(
+                'action'      => 'sendContact',
+                'status_code' => $telegram_response['status_code'],
+                'telegram_ok' => $telegram_response['ok'],
+                'error_code'  => $telegram_response['error_code'],
+                'description' => $telegram_response['description'],
+            )
+        );
+    }
 }

@@ -53,3 +53,4 @@ wp-config.php
 
 # Local tool cache
 .tools/
+temp/

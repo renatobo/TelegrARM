@@ -124,6 +124,14 @@ function telegrarm_build_profile_update_line($key, $value, $map) {
  * @return void
  */
 function telegrarm_profile_update($user_id, $form_data) {
+    telegrarm_log_debug_message(
+        'Profile-update handler received event.',
+        array(
+            'user_id'          => (int) $user_id,
+            'form_data_is_arr' => is_array($form_data),
+        )
+    );
+
     $bot_api_token    = (string) get_option('telegram_bot_api_token', '');
     $channel_id       = (string) get_option('telegram_channel_id_updates', '');
     $arm_allowed_keys = get_option('telegrarm_arm_mapping', array());
@@ -132,6 +140,16 @@ function telegrarm_profile_update($user_id, $form_data) {
     $url              = "https://api.telegram.org/bot{$bot_api_token}/sendMessage";
 
     if ('' === $bot_api_token || '' === $channel_id || !is_array($arm_allowed_keys) || !is_array($form_data)) {
+        telegrarm_log_debug_message(
+            'Profile-update handler skipped: missing configuration or invalid payload.',
+            array(
+                'bot_token_set'   => '' !== $bot_api_token,
+                'channel_id_set'   => '' !== $channel_id,
+                'mapping_is_array' => is_array($arm_allowed_keys),
+                'form_data_is_arr' => is_array($form_data),
+            )
+        );
+
         return;
     }
 
@@ -148,10 +166,32 @@ function telegrarm_profile_update($user_id, $form_data) {
     $result = wp_remote_post($url, array('body' => $post_data));
 
     if (is_wp_error($result)) {
+        telegrarm_log_debug_message(
+            'Profile-update Telegram message request failed.',
+            array(
+                'action' => 'sendMessage',
+                'error'  => $result->get_error_message(),
+                'code'   => $result->get_error_code(),
+            )
+        );
+
         return;
     }
 
-    if (200 !== wp_remote_retrieve_response_code($result)) {
+    $telegram_response = telegrarm_get_telegram_response_details($result);
+
+    if (200 !== $telegram_response['status_code'] || true !== $telegram_response['ok']) {
+        telegrarm_log_debug_message(
+            'Profile-update Telegram message request was unsuccessful.',
+            array(
+                'action'      => 'sendMessage',
+                'status_code' => $telegram_response['status_code'],
+                'telegram_ok' => $telegram_response['ok'],
+                'error_code'  => $telegram_response['error_code'],
+                'description' => $telegram_response['description'],
+            )
+        );
+
         return;
     }
 }

@@ -5,7 +5,15 @@
  * @package TelegrARM
  */
 
-class WP_Error {}
+class WP_Error {
+    public function get_error_message(string $code = ''): string {
+        return '';
+    }
+
+    public function get_error_code(): string|int {
+        return '';
+    }
+}
 
 /**
  * @param callable|string $callback
@@ -58,6 +66,10 @@ function sanitize_text_field(string $str): string {
     return $str;
 }
 
+function sanitize_textarea_field(string $str): string {
+    return $str;
+}
+
 /**
  * @param array<string, mixed> $args
  * @return array<string, mixed>|WP_Error
@@ -80,6 +92,20 @@ function admin_url(string $path = '', string $scheme = 'admin'): string {
 }
 
 function current_user_can(string $capability): bool {
+    return true;
+}
+
+/**
+ * @return mixed
+ */
+function get_transient(string $transient) {
+    return false;
+}
+
+/**
+ * @param mixed $value
+ */
+function set_transient(string $transient, $value, int $expiration): bool {
     return true;
 }
 
@@ -147,6 +173,28 @@ function wp_remote_retrieve_body($response): string {
 function wp_http_validate_url(string $url): string|false {
     return $url;
 }
+
+function wp_create_nonce(string|int $action = -1): string {
+    return '';
+}
+
+/**
+ * @param string|false $query_arg
+ * @return int|string|false
+ */
+function check_ajax_referer(string|int $action = -1, string|false $query_arg = false, bool $stop = true) {
+    return 1;
+}
+
+/**
+ * @param mixed $value
+ */
+function wp_send_json_success($value = null, ?int $status_code = null, int $flags = 0): void {}
+
+/**
+ * @param mixed $value
+ */
+function wp_send_json_error($value = null, ?int $status_code = null, int $flags = 0): void {}
 
 /**
  * @param mixed $data

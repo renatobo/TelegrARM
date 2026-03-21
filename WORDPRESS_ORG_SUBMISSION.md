@@ -1,13 +1,18 @@
 # WordPress.org Submission Checklist
 
-Release prepared in this repository: `0.4.4`
+Release prepared in this repository: `0.5.0`
 
 Submission ZIP:
-- `/Users/renatobo/development/TelegrARM/TelegrARM-0.4.4.zip`
+- `/Users/renatobo/development/TelegrARM/TelegrARM-v0.5.0.zip`
 
 What is already prepared:
-- Plugin version bumped to `0.4.4` in `telegrarm.php` and `readme.txt`.
-- `readme.txt` updated with a `0.4.4` changelog and upgrade notice.
+- Plugin version bumped to `0.5.0` in `telegrarm.php` and `readme.txt`.
+- `readme.txt` updated with a `0.5.0` changelog and upgrade notice.
+- Added opt-in debug logging for sanitized production troubleshooting.
+- Added an ARMember field discovery UI to reduce manual JSON entry.
+- Updated discovery to read ARMember registry data first, then form-field definitions, before falling back to usermeta scanning.
+- Hardened the discovery UI so existing mappings remain selected and sensitive/non-data fields are excluded from generated JSON.
+- Tightened Telegram response validation and debug-log redaction so failures are surfaced without leaking secrets.
 - Telegram external-service disclosure added for plugin review.
 - Direct-access guards added to included PHP handler files.
 - Package build updated to include the plugin icon asset.

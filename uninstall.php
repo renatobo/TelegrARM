@@ -19,6 +19,7 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 delete_option('telegrarm_profile_update');
 delete_option('telegrarm_after_new_user_notification');
 delete_option('telegram_bot_api_token');
+delete_option('telegrarm_debug_logging');
 delete_option('telegram_channel_id_newuser');
 delete_option('telegram_channel_id_updates');
 delete_option('telegram_send_contact_during_registration');

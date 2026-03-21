@@ -4,8 +4,8 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.4.4
-Version: 0.4.4
+Stable tag: 0.5.0
+Version: 0.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,8 @@ Key capabilities:
 - Configure separate Telegram channel/chat IDs per event type
 - Map ARMember fields to human-friendly labels using JSON
 - Optional Telegram contact card send on registration
+- Opt-in debug logging for sanitized production troubleshooting
+- ARMember field discovery UI that builds mapping JSON from ARMember registry data
 
 External services:
 - This plugin connects to the Telegram Bot API to send notifications when enabled ARMember events fire.
@@ -64,6 +66,21 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 
 == Changelog ==
 
+= 0.5.0 =
+- Hardened the ARMember field discovery workflow so existing mappings stay selected by default, non-data and sensitive fields are excluded, and discovery messaging matches the real registry-first behavior.
+- Added more robust Telegram delivery diagnostics by validating the Bot API `ok` response body, broadening debug-log redaction, and covering both message and contact send failures.
+- Extended local Psalm support and project config so static analysis passes cleanly in the repository workspace.
+
+= 0.4.7 =
+- Switched the field discovery UI to read ARMember registry data first, then form-field definitions, before falling back to usermeta scanning.
+
+= 0.4.6 =
+- Added an ARMember field discovery UI that scans stored site meta, suggests common preset keys, and builds the mapping JSON from selected fields.
+
+= 0.4.5 =
+- Added an opt-in debug logging toggle that writes sanitized Telegram failure traces to the PHP error log for live production troubleshooting.
+- Added request-failure logging for the optional registration contact send path so silent failures are easier to diagnose.
+
 = 0.4.4 =
 - Finalized dual-distribution release metadata so GitHub plus Git Updater remains the primary channel while WordPress.org stays submission-ready as a secondary channel.
 - Added plugin text-domain loading, handler direct-access guards, and WordPress HTTP Psalm stubs for cleaner runtime and CI behavior.
@@ -95,6 +112,18 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.5.0 =
+Hardens the discovery and Telegram debugging flows, and keeps Psalm clean in the local workspace.
+
+= 0.4.7 =
+Prefers ARMember registry data for mapping discovery and uses usermeta only as a fallback.
+
+= 0.4.6 =
+Builds on the debug logging update with an ARMember field discovery UI that reduces manual JSON entry.
+
+= 0.4.5 =
+Enables opt-in debug logging for production troubleshooting without exposing Telegram tokens or other sensitive values.
 
 = 0.4.4 =
 Refines the plugin for the GitHub-first, WordPress.org-secondary release flow and bundles the related hardening/documentation updates.

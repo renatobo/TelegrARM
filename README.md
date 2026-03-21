@@ -16,6 +16,8 @@ WordPress plugin for ARMember that sends Telegram notifications for selected use
 - Separate Telegram channel/chat IDs for each event type
 - Configurable ARMember key-to-label mapping (JSON)
 - Optional contact push on registration (`sendContact`) with phone normalization
+- Opt-in debug logging for sanitized failure traces during live troubleshooting
+- ARMember field discovery UI that builds mapping JSON from ARMember registry data first, then form fields, then usermeta fallback
 - Conditional hook loading (only enabled handlers are attached)
 - Git Updater-compatible release assets for dashboard updates
 - Versioned release ZIPs built automatically by GitHub Actions

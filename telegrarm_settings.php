@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) {
 
 add_action('admin_init', 'telegrarm_settings_init');
 add_action('admin_menu', 'telegrarm_settings_menu');
+add_action('wp_ajax_telegrarm_discover_arm_metakeys', 'telegrarm_ajax_discover_arm_metakeys');
 
 /**
  * Register plugin settings.
@@ -43,6 +44,16 @@ function telegrarm_settings_init() {
             'type' => 'string',
             'sanitize_callback' => 'telegrarm_sanitize_bot_token',
             'default' => '',
+        )
+    );
+
+    register_setting(
+        'telegrarm_settings_group',
+        'telegrarm_debug_logging',
+        array(
+            'type' => 'boolean',
+            'sanitize_callback' => 'telegrarm_sanitize_checkbox',
+            'default' => false,
         )
     );
 
@@ -115,6 +126,639 @@ function telegrarm_settings_init() {
  */
 function telegrarm_sanitize_checkbox($value) {
     return !empty($value);
+}
+
+/**
+ * Determine whether TelegrARM debug logging is enabled.
+ *
+ * @return bool
+ */
+function telegrarm_is_debug_logging_enabled() {
+    return (bool) get_option('telegrarm_debug_logging', false);
+}
+
+/**
+ * Normalize a debug context value so it can be safely encoded.
+ *
+ * @param mixed  $value Context value.
+ * @param string $key   Optional context key.
+ * @return mixed
+ */
+function telegrarm_sanitize_debug_context_value($value, $key = '') {
+    if (is_array($value)) {
+        $sanitized = array();
+
+        foreach ($value as $nested_key => $nested_value) {
+            $sanitized[$nested_key] = telegrarm_sanitize_debug_context_value($nested_value, is_scalar($nested_key) ? (string) $nested_key : '');
+        }
+
+        return $sanitized;
+    }
+
+    if (is_object($value)) {
+        return telegrarm_sanitize_debug_context_value((array) $value, $key);
+    }
+
+    if (!is_scalar($value) && null !== $value) {
+        return '';
+    }
+
+    if ('' !== $key && preg_match('/token|secret|authorization|password|phone/i', $key)) {
+        return '[redacted]';
+    }
+
+    if (is_bool($value) || is_int($value) || is_float($value) || null === $value) {
+        return $value;
+    }
+
+    $text = sanitize_textarea_field((string) $value);
+
+    return function_exists('mb_substr') ? mb_substr($text, 0, 500) : substr($text, 0, 500);
+}
+
+/**
+ * Write a sanitized debug message to the PHP error log when enabled.
+ *
+ * @param string $message Log message.
+ * @param array  $context Optional structured context.
+ * @return void
+ */
+function telegrarm_log_debug_message($message, array $context = array()) {
+    if (!telegrarm_is_debug_logging_enabled()) {
+        return;
+    }
+
+    $entry = array(
+        'message' => sanitize_text_field((string) $message),
+    );
+
+    if (!empty($context)) {
+        $entry['context'] = telegrarm_sanitize_debug_context_value($context);
+    }
+
+    error_log('TelegrARM debug: ' . wp_json_encode($entry));
+}
+
+/**
+ * Extract normalized details from a Telegram Bot API response.
+ *
+ * @param array<string, mixed>|mixed $response HTTP response.
+ * @return array{status_code:int,ok:bool|null,description:string,error_code:int|null}
+ */
+function telegrarm_get_telegram_response_details($response) {
+    $details = array(
+        'status_code' => 0,
+        'ok'          => null,
+        'description' => __('Unknown Telegram API error.', 'telegrarm'),
+        'error_code'  => null,
+    );
+
+    if (!is_array($response)) {
+        return $details;
+    }
+
+    $details['status_code'] = (int) wp_remote_retrieve_response_code($response);
+
+    $body = wp_remote_retrieve_body($response);
+
+    if (!is_string($body) || '' === trim($body)) {
+        if (200 === $details['status_code']) {
+            $details['description'] = __('Empty Telegram API response body.', 'telegrarm');
+        }
+
+        return $details;
+    }
+
+    $decoded = json_decode($body, true);
+
+    if (!is_array($decoded)) {
+        $details['description'] = __('Invalid Telegram API response body.', 'telegrarm');
+
+        return $details;
+    }
+
+    if (array_key_exists('ok', $decoded)) {
+        $details['ok'] = (bool) $decoded['ok'];
+    }
+
+    if (!empty($decoded['description']) && is_scalar($decoded['description'])) {
+        $details['description'] = sanitize_text_field((string) $decoded['description']);
+    }
+
+    if (isset($decoded['error_code']) && is_scalar($decoded['error_code'])) {
+        $details['error_code'] = (int) $decoded['error_code'];
+    }
+
+    return $details;
+}
+
+/**
+ * Extract a readable Telegram API error without triggering notices.
+ *
+ * @param array<string, mixed>|mixed $response HTTP response.
+ * @return string
+ */
+if (!function_exists('telegrarm_get_telegram_error_message')) {
+    function telegrarm_get_telegram_error_message($response) {
+        $details = telegrarm_get_telegram_response_details($response);
+
+        return $details['description'];
+    }
+}
+
+/**
+ * Humanize a meta key into a label suggestion.
+ *
+ * @param string $key Meta key.
+ * @return string
+ */
+function telegrarm_humanize_metakey_label($key) {
+    $label = trim((string) $key);
+
+    if ('' === $label) {
+        return '';
+    }
+
+    $label = preg_replace('/([a-z])([A-Z])/', '$1 $2', $label);
+    $label = str_replace(array('_', '-'), ' ', $label);
+    $label = preg_replace('/\s+/', ' ', $label);
+
+    return ucwords(trim((string) $label));
+}
+
+/**
+ * Determine whether a discovered ARMember field is safe and useful to expose in
+ * the mapping builder.
+ *
+ * @param string               $meta_key      Candidate meta key.
+ * @param array<string, mixed> $field_options Optional ARMember field options.
+ * @return bool
+ */
+function telegrarm_should_include_discovered_metakey($meta_key, array $field_options = array()) {
+    $meta_key = trim((string) $meta_key);
+
+    if ('' === $meta_key) {
+        return false;
+    }
+
+    $excluded_meta_keys = array(
+        'user_pass',
+        'password',
+        'confirm_password',
+        'confirm_user_pass',
+        'repeat_password',
+        'repeat_user_pass',
+        'session_tokens',
+        'wp_capabilities',
+        'wp_user_level',
+    );
+
+    if (in_array($meta_key, $excluded_meta_keys, true)) {
+        return false;
+    }
+
+    if (0 === strpos($meta_key, '_')) {
+        return false;
+    }
+
+    if (0 === strpos($meta_key, 'arm_') && !in_array($meta_key, array('arm_social_field_instagram'), true)) {
+        return false;
+    }
+
+    if (!empty($field_options)) {
+        $field_type = isset($field_options['type']) && is_scalar($field_options['type']) ? trim((string) $field_options['type']) : '';
+
+        if (in_array($field_type, array('hidden', 'html', 'password', 'section', 'social_fields', 'submit'), true)) {
+            return false;
+        }
+
+        if (!empty($field_options['is_hidden']) || !empty($field_options['hidden'])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Return common ARMember and WordPress profile meta keys that are useful in TelegrARM.
+ *
+ * @return array<int, string>
+ */
+function telegrarm_get_common_armember_metakeys() {
+    return array(
+        'first_name',
+        'last_name',
+        'user_email',
+        'user_login',
+        'display_name',
+        'nickname',
+        'user_url',
+        'description',
+        'arm_social_field_instagram',
+        'avatar',
+    );
+}
+
+/**
+ * Get the active ARMember runtime object if the plugin is loaded.
+ *
+ * @return object|null
+ */
+function telegrarm_get_armember_runtime_object() {
+    global $ARMemberLite, $ARMember;
+
+    if (is_object($ARMemberLite)) {
+        return $ARMemberLite;
+    }
+
+    if (is_object($ARMember)) {
+        return $ARMember;
+    }
+
+    return null;
+}
+
+/**
+ * Resolve an ARMember table name, falling back to the current WordPress prefix.
+ *
+ * @param string $property      Runtime property name.
+ * @param string $fallback_name Table suffix without the WordPress prefix.
+ * @return string
+ */
+function telegrarm_get_armember_table_name($property, $fallback_name) {
+    $runtime = telegrarm_get_armember_runtime_object();
+
+    if (is_object($runtime) && isset($runtime->{$property}) && is_string($runtime->{$property}) && '' !== $runtime->{$property}) {
+        return $runtime->{$property};
+    }
+
+    global $wpdb;
+
+    return $wpdb->prefix . $fallback_name;
+}
+
+/**
+ * Normalize a discovered field entry into a consistent shape.
+ *
+ * @param string $key    Meta key.
+ * @param string $label  Suggested label.
+ * @param string $source Discovery source.
+ * @return array{key:string,label:string,source:string}|null
+ */
+function telegrarm_build_discovered_metakey_item($key, $label, $source) {
+    $key = is_scalar($key) ? trim((string) $key) : '';
+    $label = is_scalar($label) ? trim((string) $label) : '';
+    $source = is_scalar($source) ? trim((string) $source) : 'discovered';
+
+    if ('' === $key) {
+        return null;
+    }
+
+    if ('' === $label) {
+        $label = telegrarm_humanize_metakey_label($key);
+    }
+
+    return array(
+        'key'    => $key,
+        'label'  => $label,
+        'source' => $source,
+    );
+}
+
+/**
+ * Merge a discovered field item into the result set, preserving the more
+ * authoritative source when the same key appears multiple times.
+ *
+ * @param array<string, array{key:string,label:string,source:string}> $items Collected items keyed by meta key.
+ * @param array{key:string,label:string,source:string}                $item  Item to merge.
+ * @return void
+ */
+function telegrarm_merge_discovered_metakey_item(array &$items, array $item) {
+    if (empty($item['key'])) {
+        return;
+    }
+
+    $source_priority = array(
+        'preset'     => 1,
+        'form_field' => 2,
+        'common'     => 3,
+        'usermeta'   => 4,
+        'fallback'   => 5,
+        'discovered' => 6,
+    );
+
+    $key = $item['key'];
+
+    if (!isset($items[$key])) {
+        $items[$key] = $item;
+
+        return;
+    }
+
+    $existing_source = isset($source_priority[$items[$key]['source']]) ? $source_priority[$items[$key]['source']] : 99;
+    $new_source = isset($source_priority[$item['source']]) ? $source_priority[$item['source']] : 99;
+
+    if ($new_source < $existing_source) {
+        $items[$key] = $item;
+
+        return;
+    }
+
+    if ('' === $items[$key]['label'] && '' !== $item['label']) {
+        $items[$key]['label'] = $item['label'];
+    }
+}
+
+/**
+ * Extract ARMember preset field definitions from the arm_preset_form_fields option.
+ *
+ * @return array<int, array{key:string,label:string,source:string}>
+ */
+function telegrarm_get_armember_preset_field_items() {
+    $preset_form_fields = maybe_unserialize(get_option('arm_preset_form_fields', ''));
+
+    if (!is_array($preset_form_fields) || empty($preset_form_fields)) {
+        return array();
+    }
+
+    $items = array();
+
+    foreach ($preset_form_fields as $group_name => $group_fields) {
+        if (!is_array($group_fields)) {
+            continue;
+        }
+
+        foreach ($group_fields as $field_key => $field_value) {
+            if (!is_array($field_value)) {
+                continue;
+            }
+
+            $meta_key = isset($field_value['meta_key']) && is_scalar($field_value['meta_key']) ? trim((string) $field_value['meta_key']) : '';
+            $label    = isset($field_value['label']) && is_scalar($field_value['label']) ? trim((string) $field_value['label']) : '';
+
+            if ('' === $meta_key && is_scalar($field_key)) {
+                $meta_key = trim((string) $field_key);
+            }
+
+            if ('' === $meta_key) {
+                continue;
+            }
+
+            if (!telegrarm_should_include_discovered_metakey($meta_key, $field_value)) {
+                continue;
+            }
+
+            $source = 'default' === $group_name ? 'preset' : 'preset';
+            $item   = telegrarm_build_discovered_metakey_item($meta_key, $label, $source);
+
+            if (null !== $item) {
+                $items[] = $item;
+            }
+        }
+    }
+
+    return $items;
+}
+
+/**
+ * Extract ARMember field definitions from the form field table.
+ *
+ * @return array<int, array{key:string,label:string,source:string}>
+ */
+function telegrarm_get_armember_form_field_items() {
+    global $wpdb;
+
+    $table_name = telegrarm_get_armember_table_name('tbl_arm_form_field', 'arm_form_field');
+    $table_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table_name)));
+
+    if ($table_name !== $table_exists) {
+        return array();
+    }
+
+    $rows = $wpdb->get_results(
+        "SELECT arm_form_field_slug, arm_form_field_option, arm_form_field_status
+         FROM `{$table_name}`
+         WHERE arm_form_field_slug <> ''
+           AND arm_form_field_status != 2
+         ORDER BY arm_form_field_id ASC",
+        ARRAY_A
+    );
+
+    if (!is_array($rows) || empty($rows)) {
+        return array();
+    }
+
+    $items = array();
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $field_options = isset($row['arm_form_field_option']) ? maybe_unserialize($row['arm_form_field_option']) : array();
+        $field_options = is_array($field_options) ? $field_options : array();
+
+        $meta_key = isset($field_options['meta_key']) && is_scalar($field_options['meta_key']) ? trim((string) $field_options['meta_key']) : '';
+        $label    = isset($field_options['label']) && is_scalar($field_options['label']) ? trim((string) $field_options['label']) : '';
+
+        if ('' === $meta_key && isset($row['arm_form_field_slug']) && is_scalar($row['arm_form_field_slug'])) {
+            $meta_key = trim((string) $row['arm_form_field_slug']);
+        }
+
+        if ('' === $meta_key) {
+            continue;
+        }
+
+        if (!telegrarm_should_include_discovered_metakey($meta_key, $field_options)) {
+            continue;
+        }
+
+        $source = (!empty($field_options['_builtin']) || !empty($field_options['default_field'])) ? 'common' : 'form_field';
+        $item   = telegrarm_build_discovered_metakey_item($meta_key, $label, $source);
+
+        if (null !== $item) {
+            $items[] = $item;
+        }
+    }
+
+    return $items;
+}
+
+/**
+ * Collect likely ARMember user meta keys by scanning the WordPress usermeta table.
+ *
+ * @return array<int, array{key:string,label:string,source:string}>
+ */
+function telegrarm_get_armember_usermeta_items() {
+    global $wpdb;
+
+    $technical_user_meta_keys = array(
+        'admin_color',
+        'comment_shortcuts',
+        'dismissed_wp_pointers',
+        'locale',
+        'manages',
+        'rich_editing',
+        'screen_layout_dashboard',
+        'screen_layout_profile',
+        'session_tokens',
+        'show_admin_bar_front',
+        'syntax_highlighting',
+        'user_level',
+        'user-settings',
+        'user-settings-time',
+        'wp_capabilities',
+        'wp_user_level',
+    );
+
+    $user_meta_keys = $wpdb->get_col(
+        "SELECT DISTINCT meta_key
+         FROM {$wpdb->usermeta}
+         WHERE meta_key <> ''
+           AND meta_key NOT LIKE '\\_%'
+         ORDER BY meta_key ASC"
+    );
+
+    if (!is_array($user_meta_keys) || empty($user_meta_keys)) {
+        return array();
+    }
+
+    $items = array();
+
+    foreach ($user_meta_keys as $meta_key) {
+        if (!is_scalar($meta_key)) {
+            continue;
+        }
+
+        $meta_key = trim((string) $meta_key);
+
+        if ('' === $meta_key || in_array($meta_key, $technical_user_meta_keys, true)) {
+            continue;
+        }
+
+        if (!telegrarm_should_include_discovered_metakey($meta_key)) {
+            continue;
+        }
+
+        $item = telegrarm_build_discovered_metakey_item($meta_key, telegrarm_humanize_metakey_label($meta_key), 'usermeta');
+
+        if (null !== $item) {
+            $items[] = $item;
+        }
+    }
+
+    return $items;
+}
+
+/**
+ * Discover likely ARMember meta keys from the current site.
+ *
+ * Discovery order:
+ * 1. ARMember preset fields from `arm_preset_form_fields`
+ * 2. ARMember form field registry from `tbl_arm_form_field`
+ * 3. Fallback scan of public user meta keys
+ *
+ * @param bool $force_refresh Whether to bypass the transient cache.
+ * @return array<int, array{key:string,label:string,source:string}>
+ */
+function telegrarm_get_discovered_armember_metakeys($force_refresh = false) {
+    $cache_key = 'telegrarm_armember_metakeys';
+
+    if (!$force_refresh) {
+        $cached = get_transient($cache_key);
+
+        if (is_array($cached)) {
+            return $cached;
+        }
+    }
+
+    $items = array();
+
+    $registry_items = array();
+
+    foreach (telegrarm_get_armember_preset_field_items() as $item) {
+        telegrarm_merge_discovered_metakey_item($registry_items, $item);
+    }
+
+    foreach (telegrarm_get_armember_form_field_items() as $item) {
+        telegrarm_merge_discovered_metakey_item($registry_items, $item);
+    }
+
+    $items = $registry_items;
+
+    foreach (telegrarm_get_common_armember_metakeys() as $key) {
+        $item = telegrarm_build_discovered_metakey_item($key, telegrarm_humanize_metakey_label($key), 'common');
+
+        if (null !== $item) {
+            telegrarm_merge_discovered_metakey_item($items, $item);
+        }
+    }
+
+    if (empty($registry_items)) {
+        foreach (telegrarm_get_armember_usermeta_items() as $item) {
+            telegrarm_merge_discovered_metakey_item($items, $item);
+        }
+    }
+
+    $items = array_values($items);
+
+    usort(
+        $items,
+        static function ($left, $right) {
+            return strcasecmp($left['key'], $right['key']);
+        }
+    );
+
+    set_transient($cache_key, $items, 10 * MINUTE_IN_SECONDS);
+
+    return $items;
+}
+
+/**
+ * AJAX endpoint that returns discovered ARMember meta keys.
+ *
+ * @return void
+ */
+function telegrarm_ajax_discover_arm_metakeys() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(
+            array(
+                'message' => __('You do not have permission to discover ARMember fields.', 'telegrarm'),
+            ),
+            403
+        );
+    }
+
+    check_ajax_referer('telegrarm_discover_arm_metakeys');
+
+    $force_refresh = !empty($_POST['refresh']);
+    $saved_mapping = telegrarm_get_arm_mapping();
+    $items = array();
+
+    foreach (telegrarm_get_discovered_armember_metakeys($force_refresh) as $item) {
+        if (empty($item['key'])) {
+            continue;
+        }
+
+        $is_selected = isset($saved_mapping[$item['key']]);
+
+        $items[] = array(
+            'key'        => $item['key'],
+            'label'      => isset($saved_mapping[$item['key']]) && is_scalar($saved_mapping[$item['key']])
+                ? (string) $saved_mapping[$item['key']]
+                : $item['label'],
+            'source'     => $item['source'],
+            'isSelected' => $is_selected,
+        );
+    }
+
+    wp_send_json_success(
+        array(
+            'count' => count($items),
+            'items' => $items,
+        )
+    );
 }
 
 /**
@@ -287,6 +931,7 @@ function telegrarm_settings_page_cb() {
     $new_user_enabled = (bool) get_option('telegrarm_after_new_user_notification', false);
     $profile_update_enabled = (bool) get_option('telegrarm_profile_update', false);
     $send_contact_enabled = (bool) get_option('telegram_send_contact_during_registration', false);
+    $debug_logging_enabled = (bool) get_option('telegrarm_debug_logging', false);
     $mapping_json = wp_json_encode(
         telegrarm_get_arm_mapping(),
         JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -389,6 +1034,22 @@ function telegrarm_settings_page_cb() {
                                 <strong><?php esc_html_e('Transport', 'telegrarm'); ?></strong>
                                 <span><?php esc_html_e('TelegrARM uses the WordPress HTTP API to post directly to Telegram.', 'telegrarm'); ?></span>
                             </div>
+                        </div>
+
+                        <div class="telegrarm-switch-row telegrarm-switch-row-spaced">
+                            <div>
+                                <h3><?php esc_html_e('Debug logging', 'telegrarm'); ?></h3>
+                                <p><?php esc_html_e('Write sanitized failure traces to the PHP error log when Telegram requests fail or handlers skip an event. Token values are never logged.', 'telegrarm'); ?></p>
+                            </div>
+                            <label class="telegrarm-toggle">
+                                <input
+                                    type="checkbox"
+                                    name="telegrarm_debug_logging"
+                                    value="1"
+                                    <?php checked(true, $debug_logging_enabled, true); ?>
+                                />
+                                <span><?php esc_html_e('Enable debug logging', 'telegrarm'); ?></span>
+                            </label>
                         </div>
                     </div>
                 </section>
@@ -534,6 +1195,29 @@ function telegrarm_settings_page_cb() {
                             ><?php echo esc_textarea($mapping_json); ?></textarea>
                             <span class="description"><?php esc_html_e('Use a JSON object where each key is the stored ARMember field key and each value is the label shown in Telegram.', 'telegrarm'); ?></span>
                         </label>
+
+                        <div class="telegrarm-card telegrarm-card-accent telegrarm-mapping-builder">
+                            <div class="telegrarm-switch-row">
+                                <div>
+                                    <h3><?php esc_html_e('Discover ARMember fields', 'telegrarm'); ?></h3>
+                                    <p><?php esc_html_e('Pull ARMember field keys from the plugin registry first, then fall back to stored user meta only if those registry sources are unavailable.', 'telegrarm'); ?></p>
+                                </div>
+                                <button type="button" class="button button-primary" id="telegrarm-discover-metakeys">
+                                    <?php esc_html_e('Discover fields', 'telegrarm'); ?>
+                                </button>
+                            </div>
+
+                            <p class="description"><?php esc_html_e('Use the results below to select the keys you want, edit their labels, and generate the JSON back into the textarea above.', 'telegrarm'); ?></p>
+
+                            <div class="telegrarm-mapping-tools">
+                                <button type="button" class="button" id="telegrarm-select-all-metakeys"><?php esc_html_e('Select all', 'telegrarm'); ?></button>
+                                <button type="button" class="button" id="telegrarm-select-none-metakeys"><?php esc_html_e('Select none', 'telegrarm'); ?></button>
+                                <button type="button" class="button button-secondary" id="telegrarm-build-mapping"><?php esc_html_e('Build JSON', 'telegrarm'); ?></button>
+                            </div>
+
+                            <div id="telegrarm-metakeys-status" class="telegrarm-discovery-status" aria-live="polite"></div>
+                            <div id="telegrarm-metakeys-results" class="telegrarm-metakeys-results" hidden></div>
+                        </div>
 
                         <div class="telegrarm-grid telegrarm-grid-two">
                             <div class="telegrarm-code-card">
@@ -713,6 +1397,66 @@ function telegrarm_settings_page_cb() {
                 margin-bottom: 18px;
             }
 
+            .telegrarm-switch-row-spaced {
+                margin-top: 10px;
+            }
+
+            .telegrarm-mapping-builder {
+                margin-top: 18px;
+            }
+
+            .telegrarm-mapping-tools {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin: 14px 0 12px;
+            }
+
+            .telegrarm-discovery-status {
+                min-height: 22px;
+                margin: 0 0 12px;
+                color: #475569;
+            }
+
+            .telegrarm-metakeys-results {
+                margin-top: 8px;
+            }
+
+            .telegrarm-metakeys-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            .telegrarm-metakeys-table th,
+            .telegrarm-metakeys-table td {
+                padding: 10px 8px;
+                border-top: 1px solid #dcdcde;
+                vertical-align: top;
+                text-align: left;
+            }
+
+            .telegrarm-metakeys-table thead th {
+                border-top: 0;
+                color: #1d2327;
+                font-weight: 600;
+            }
+
+            .telegrarm-metakeys-table input[type="text"] {
+                max-width: none;
+            }
+
+            .telegrarm-metakey-source {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 999px;
+                background: #f6f7f7;
+                color: #475569;
+                font-size: 12px;
+                font-weight: 600;
+                line-height: 1.6;
+            }
+
             .telegrarm-toggle {
                 display: inline-flex;
                 gap: 10px;
@@ -828,6 +1572,284 @@ function telegrarm_settings_page_cb() {
         document.addEventListener('DOMContentLoaded', function () {
             const tabs = document.querySelectorAll('.telegrarm-tab');
             const panels = document.querySelectorAll('.telegrarm-panel');
+            const mappingTextarea = document.getElementById('telegrarm_arm_mapping');
+            const discoverButton = document.getElementById('telegrarm-discover-metakeys');
+            const selectAllButton = document.getElementById('telegrarm-select-all-metakeys');
+            const selectNoneButton = document.getElementById('telegrarm-select-none-metakeys');
+            const buildButton = document.getElementById('telegrarm-build-mapping');
+            const statusNode = document.getElementById('telegrarm-metakeys-status');
+            const resultsNode = document.getElementById('telegrarm-metakeys-results');
+            const ajaxUrl = window.ajaxurl || <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+            const ajaxNonce = <?php echo wp_json_encode(wp_create_nonce('telegrarm_discover_arm_metakeys')); ?>;
+            const existingMapping = <?php echo wp_json_encode(telegrarm_get_arm_mapping(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+            const i18n = <?php echo wp_json_encode(
+                array(
+                    'builtJsonSingular' => __('Built mapping JSON from %d field.', 'telegrarm'),
+                    'builtJsonPlural' => __('Built mapping JSON from %d fields.', 'telegrarm'),
+                    'currentMappingCountSingular' => __('The current mapping already contains %d field. Discover more fields to add or refine them.', 'telegrarm'),
+                    'currentMappingCountPlural' => __('The current mapping already contains %d fields. Discover more fields to add or refine them.', 'telegrarm'),
+                    'detected' => __('Detected', 'telegrarm'),
+                    'discovering' => __('Discovering ARMember fields...', 'telegrarm'),
+                    'discoveredCountSingular' => __('Discovered %d candidate field.', 'telegrarm'),
+                    'discoveredCountPlural' => __('Discovered %d candidate fields.', 'telegrarm'),
+                    'formField' => __('Form field', 'telegrarm'),
+                    'metaKey' => __('Meta key', 'telegrarm'),
+                    'noCandidates' => __('No candidate ARMember fields were found on this site yet.', 'telegrarm'),
+                    'preset' => __('Preset', 'telegrarm'),
+                    'requestFailed' => __('Request failed with status %d.', 'telegrarm'),
+                    'selectAtLeastOne' => __('Select at least one field before building the JSON.', 'telegrarm'),
+                    'source' => __('Source', 'telegrarm'),
+                    'unexpectedResponse' => __('Unexpected response from the discovery endpoint.', 'telegrarm'),
+                    'unknownDiscoveryError' => __('Unable to discover ARMember fields.', 'telegrarm'),
+                    'use' => __('Use', 'telegrarm'),
+                    'usermeta' => __('Usermeta', 'telegrarm'),
+                    'label' => __('Label', 'telegrarm'),
+                    'builtIn' => __('Built-in', 'telegrarm'),
+                ),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ); ?>;
+
+            function formatCountMessage(singularTemplate, pluralTemplate, count) {
+                const template = count === 1 ? singularTemplate : pluralTemplate;
+                return String(template || '').replace('%d', String(count));
+            }
+
+            function formatMessage(template, value) {
+                return String(template || '').replace('%d', String(value));
+            }
+
+            function humanizeKey(key) {
+                return String(key || '')
+                    .replace(/([a-z])([A-Z])/g, '$1 $2')
+                    .replace(/[_-]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .replace(/\b\w/g, function (match) {
+                        return match.toUpperCase();
+                    });
+            }
+
+            function setStatus(message, isError) {
+                if (!statusNode) {
+                    return;
+                }
+
+                statusNode.textContent = message || '';
+                statusNode.style.color = isError ? '#b32d2e' : '';
+            }
+
+            function renderMetakeys(items) {
+                if (!resultsNode) {
+                    return;
+                }
+
+                resultsNode.innerHTML = '';
+                resultsNode.hidden = false;
+
+                if (!items || !items.length) {
+                    resultsNode.innerHTML = '<p>' + i18n.noCandidates + '</p>';
+                    return;
+                }
+
+                const table = document.createElement('table');
+                table.className = 'telegrarm-metakeys-table';
+
+                const thead = document.createElement('thead');
+                const headRow = document.createElement('tr');
+                [i18n.use, i18n.metaKey, i18n.label, i18n.source].forEach(function (title) {
+                    const th = document.createElement('th');
+                    th.textContent = title;
+                    headRow.appendChild(th);
+                });
+                thead.appendChild(headRow);
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+
+                items.forEach(function (item) {
+                    const row = document.createElement('tr');
+                    row.dataset.key = item.key || '';
+
+                    const checkCell = document.createElement('td');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.checked = !!item.isSelected;
+                    checkbox.setAttribute('aria-label', item.key || '');
+                    checkCell.appendChild(checkbox);
+                    row.appendChild(checkCell);
+
+                    const keyCell = document.createElement('td');
+                    const keyCode = document.createElement('code');
+                    keyCode.textContent = item.key || '';
+                    keyCell.appendChild(keyCode);
+                    row.appendChild(keyCell);
+
+                    const labelCell = document.createElement('td');
+                    const labelInput = document.createElement('input');
+                    labelInput.type = 'text';
+                    labelInput.className = 'regular-text telegrarm-input';
+                    labelInput.value = item.label || humanizeKey(item.key);
+                    labelCell.appendChild(labelInput);
+                    row.appendChild(labelCell);
+
+                    const sourceCell = document.createElement('td');
+                    const sourceBadge = document.createElement('span');
+                    sourceBadge.className = 'telegrarm-metakey-source';
+                    if (item.source === 'form_field') {
+                        sourceBadge.textContent = i18n.formField;
+                    } else if (item.source === 'preset') {
+                        sourceBadge.textContent = i18n.preset;
+                    } else if (item.source === 'common') {
+                        sourceBadge.textContent = i18n.builtIn;
+                    } else if (item.source === 'usermeta') {
+                        sourceBadge.textContent = i18n.usermeta;
+                    } else {
+                        sourceBadge.textContent = i18n.detected;
+                    }
+                    sourceCell.appendChild(sourceBadge);
+                    row.appendChild(sourceCell);
+
+                    tbody.appendChild(row);
+                });
+
+                table.appendChild(tbody);
+                resultsNode.appendChild(table);
+            }
+
+            function collectSelectedMapping() {
+                const mapping = {};
+
+                if (!resultsNode) {
+                    return mapping;
+                }
+
+                resultsNode.querySelectorAll('tbody tr').forEach(function (row) {
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+
+                    if (!checkbox || !checkbox.checked) {
+                        return;
+                    }
+
+                    const key = row.dataset.key || '';
+                    const labelInput = row.querySelector('input[type="text"]');
+                    const label = labelInput && labelInput.value ? labelInput.value.trim() : humanizeKey(key);
+
+                    if (key) {
+                        mapping[key] = label;
+                    }
+                });
+
+                return mapping;
+            }
+
+            function setAllCheckboxes(checked) {
+                if (!resultsNode) {
+                    return;
+                }
+
+                resultsNode.querySelectorAll('tbody input[type="checkbox"]').forEach(function (checkbox) {
+                    checkbox.checked = checked;
+                });
+            }
+
+            function buildMappingJson() {
+                if (!mappingTextarea) {
+                    return;
+                }
+
+                const mapping = collectSelectedMapping();
+                const keys = Object.keys(mapping);
+
+                if (!keys.length) {
+                    setStatus(i18n.selectAtLeastOne, true);
+                    return;
+                }
+
+                mappingTextarea.value = JSON.stringify(mapping, null, 2);
+                setStatus(formatCountMessage(i18n.builtJsonSingular, i18n.builtJsonPlural, keys.length));
+                mappingTextarea.focus();
+            }
+
+            if (discoverButton && resultsNode) {
+                discoverButton.addEventListener('click', function () {
+                    setStatus(i18n.discovering);
+                    discoverButton.disabled = true;
+
+                    const body = new URLSearchParams();
+                    body.set('action', 'telegrarm_discover_arm_metakeys');
+                    body.set('_ajax_nonce', ajaxNonce);
+                    body.set('refresh', '1');
+
+                    fetch(ajaxUrl, {
+                        credentials: 'same-origin',
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        },
+                        body: body.toString(),
+                    })
+                        .then(function (response) {
+                            return response.json()
+                                .catch(function () {
+                                    throw new Error(formatMessage(i18n.requestFailed, response.status));
+                                })
+                                .then(function (payload) {
+                                    if (!response.ok) {
+                                        const message = payload && payload.data && payload.data.message ? payload.data.message : formatMessage(i18n.requestFailed, response.status);
+                                        throw new Error(message);
+                                    }
+
+                                    return payload;
+                                });
+                        })
+                        .then(function (payload) {
+                            if (!payload || !payload.success || !payload.data || !Array.isArray(payload.data.items)) {
+                                throw new Error(i18n.unexpectedResponse);
+                            }
+
+                            renderMetakeys(payload.data.items);
+                            setStatus(formatCountMessage(i18n.discoveredCountSingular, i18n.discoveredCountPlural, payload.data.count));
+                        })
+                        .catch(function (error) {
+                            resultsNode.hidden = true;
+                            resultsNode.innerHTML = '';
+                            setStatus(error.message || i18n.unknownDiscoveryError, true);
+                        })
+                        .finally(function () {
+                            discoverButton.disabled = false;
+                        });
+                });
+            }
+
+            if (selectAllButton) {
+                selectAllButton.addEventListener('click', function () {
+                    setAllCheckboxes(true);
+                });
+            }
+
+            if (selectNoneButton) {
+                selectNoneButton.addEventListener('click', function () {
+                    setAllCheckboxes(false);
+                });
+            }
+
+            if (buildButton) {
+                buildButton.addEventListener('click', function () {
+                    buildMappingJson();
+                });
+            }
+
+            if (resultsNode) {
+                resultsNode.addEventListener('input', function () {
+                    if (statusNode && statusNode.textContent) {
+                        setStatus('');
+                    }
+                });
+            }
+
+            if (resultsNode && Object.keys(existingMapping).length > 0) {
+                setStatus(formatCountMessage(i18n.currentMappingCountSingular, i18n.currentMappingCountPlural, Object.keys(existingMapping).length));
+            }
 
             function activateTab(targetPanel, updateHash) {
                 let hasMatch = false;

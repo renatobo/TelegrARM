@@ -13,6 +13,7 @@
         <ignoreFiles>
             <directory name=".git" />
             <directory name=".github" />
+            <directory name="temp" />
         </ignoreFiles>
     </projectFiles>
 
