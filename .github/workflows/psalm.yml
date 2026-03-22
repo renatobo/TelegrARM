@@ -25,5 +25,8 @@ jobs:
           tools: psalm
           coverage: none
 
+      - name: Prepare Psalm paths
+        run: mkdir -p temp
+
       - name: Run Psalm
         run: psalm --output-format=github --no-cache --shepherd --stats
