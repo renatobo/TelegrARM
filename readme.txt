@@ -4,8 +4,8 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.5.0
-Version: 0.5.0
+Stable tag: 0.5.1
+Version: 0.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 
 == Changelog ==
 
+= 0.5.1 =
+- Reissued the release from the correct commit so GitHub release assets and WordPress updates resolve to the current plugin version.
+
 = 0.5.0 =
 - Hardened the ARMember field discovery workflow so existing mappings stay selected by default, non-data and sensitive fields are excluded, and discovery messaging matches the real registry-first behavior.
 - Added more robust Telegram delivery diagnostics by validating the Bot API `ok` response body, broadening debug-log redaction, and covering both message and contact send failures.
@@ -112,6 +115,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.5.1 =
+Republishes the release from the correct commit so dashboard updates download the right package.
 
 = 0.5.0 =
 Hardens the discovery and Telegram debugging flows, and keeps Psalm clean in the local workspace.
