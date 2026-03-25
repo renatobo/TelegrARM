@@ -68,6 +68,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 
 == Changelog ==
 
+= 0.5.4 =
+- Expanded Telegram test-message feedback in the settings UI to include the target type, chat ID, HTTP status, Telegram ok flag, error code or description, and raw API response body.
+
 = 0.5.3 =
 - Updated Telegram test messages so they identify whether the validation is for the New user or Profile updates configuration before naming the current website.
 
@@ -124,6 +127,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.5.4 =
+Improves Telegram test-message feedback with explicit delivery details and the raw Telegram API response.
 
 = 0.5.3 =
 Clarifies Telegram test deliveries by naming the settings area being validated in each test message.

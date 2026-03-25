@@ -254,6 +254,43 @@ function telegrarm_get_telegram_response_details($response) {
 }
 
 /**
+ * Format a Telegram API response body for safe display in the admin UI.
+ *
+ * @param array<string, mixed>|mixed $response HTTP response.
+ * @return string
+ */
+function telegrarm_get_telegram_response_body_for_display($response) {
+    if (!is_array($response)) {
+        return '';
+    }
+
+    $body = wp_remote_retrieve_body($response);
+
+    if (!is_string($body) || '' === trim($body)) {
+        return '';
+    }
+
+    $decoded = json_decode($body, true);
+
+    if (is_array($decoded)) {
+        $encoded = wp_json_encode(
+            telegrarm_sanitize_debug_context_value($decoded),
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+
+        return is_string($encoded) ? $encoded : '';
+    }
+
+    $sanitized = trim(sanitize_textarea_field($body));
+
+    if (function_exists('mb_substr')) {
+        return mb_substr($sanitized, 0, 2000);
+    }
+
+    return substr($sanitized, 0, 2000);
+}
+
+/**
  * Extract a readable Telegram API error without triggering notices.
  *
  * @param array<string, mixed>|mixed $response HTTP response.
@@ -307,6 +344,24 @@ function telegrarm_get_test_message_target_label($target) {
 }
 
 /**
+ * Resolve the settings area label used in admin status messages.
+ *
+ * @param string $target Settings target key.
+ * @return string
+ */
+function telegrarm_get_test_message_target_status_label($target) {
+    if ('new-user' === $target) {
+        return __('New user', 'telegrarm');
+    }
+
+    if ('profile' === $target) {
+        return __('Profile updates', 'telegrarm');
+    }
+
+    return __('TelegrARM', 'telegrarm');
+}
+
+/**
  * Build the admin test message body sent to Telegram.
  *
  * @param string $target Settings target key.
@@ -318,6 +373,56 @@ function telegrarm_get_test_message_text($target) {
         telegrarm_get_test_message_target_label($target),
         telegrarm_get_test_message_site_name()
     );
+}
+
+/**
+ * Build a detailed admin feedback message for Telegram test requests.
+ *
+ * @param string                     $target            Settings target key.
+ * @param string                     $channel_id        Telegram channel or chat ID.
+ * @param array<string, mixed>|mixed $response         HTTP response.
+ * @param bool                       $request_succeeded Whether the request succeeded.
+ * @return string
+ */
+function telegrarm_build_test_message_feedback($target, $channel_id, $response, $request_succeeded) {
+    $target_label = telegrarm_get_test_message_target_status_label($target);
+    $details = telegrarm_get_telegram_response_details($response);
+    $body = telegrarm_get_telegram_response_body_for_display($response);
+
+    $lines = array(
+        $request_succeeded
+            ? sprintf(
+                __('Test message for %1$s sent successfully to chat ID %2$s.', 'telegrarm'),
+                $target_label,
+                $channel_id
+            )
+            : sprintf(
+                __('Test message for %1$s failed for chat ID %2$s.', 'telegrarm'),
+                $target_label,
+                $channel_id
+            ),
+        __('Telegram response details:', 'telegrarm'),
+        sprintf(__('HTTP status: %d', 'telegrarm'), (int) $details['status_code']),
+        sprintf(
+            __('Telegram ok: %s', 'telegrarm'),
+            true === $details['ok'] ? 'true' : (false === $details['ok'] ? 'false' : 'null')
+        ),
+    );
+
+    if (null !== $details['error_code']) {
+        $lines[] = sprintf(__('Telegram error code: %d', 'telegrarm'), (int) $details['error_code']);
+    }
+
+    if ('' !== trim((string) $details['description'])) {
+        $lines[] = sprintf(__('Telegram description: %s', 'telegrarm'), $details['description']);
+    }
+
+    if ('' !== $body) {
+        $lines[] = __('Raw response body:', 'telegrarm');
+        $lines[] = $body;
+    }
+
+    return implode("\n", $lines);
 }
 
 /**
@@ -387,6 +492,7 @@ function telegrarm_ajax_send_test_message() {
     $bot_api_token = isset($_POST['bot_token']) ? telegrarm_sanitize_bot_token(wp_unslash($_POST['bot_token'])) : '';
     $channel_id = isset($_POST['channel_id']) ? telegrarm_sanitize_channel_id(wp_unslash($_POST['channel_id'])) : '';
     $target = isset($_POST['target']) ? telegrarm_sanitize_setting_text(wp_unslash($_POST['target'])) : '';
+    $target_label = telegrarm_get_test_message_target_status_label($target);
 
     $result = telegrarm_send_telegram_text_message(
         $bot_api_token,
@@ -407,7 +513,12 @@ function telegrarm_ajax_send_test_message() {
 
         wp_send_json_error(
             array(
-                'message' => $result->get_error_message(),
+                'message' => sprintf(
+                    __('Test message for %1$s could not be sent to chat ID %2$s: %3$s', 'telegrarm'),
+                    $target_label,
+                    $channel_id,
+                    $result->get_error_message()
+                ),
             ),
             400
         );
@@ -430,7 +541,7 @@ function telegrarm_ajax_send_test_message() {
 
         wp_send_json_error(
             array(
-                'message' => $telegram_response['description'],
+                'message' => telegrarm_build_test_message_feedback($target, $channel_id, $result, false),
             ),
             400
         );
@@ -438,7 +549,7 @@ function telegrarm_ajax_send_test_message() {
 
     wp_send_json_success(
         array(
-            'message' => __('Test message sent successfully.', 'telegrarm'),
+            'message' => telegrarm_build_test_message_feedback($target, $channel_id, $result, true),
         )
     );
 }
@@ -1621,6 +1732,7 @@ function telegrarm_settings_page_cb() {
             .telegrarm-test-message-status {
                 min-height: 20px;
                 color: #475569;
+                white-space: pre-wrap;
             }
 
             .telegrarm-mapping-tools {
