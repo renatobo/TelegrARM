@@ -289,13 +289,33 @@ function telegrarm_get_test_message_site_name() {
 }
 
 /**
- * Build the admin test message body sent to Telegram.
+ * Resolve the settings area label used in admin test messages.
  *
+ * @param string $target Settings target key.
  * @return string
  */
-function telegrarm_get_test_message_text() {
+function telegrarm_get_test_message_target_label($target) {
+    if ('new-user' === $target) {
+        return __('new user', 'telegrarm');
+    }
+
+    if ('profile' === $target) {
+        return __('profile update', 'telegrarm');
+    }
+
+    return __('TelegrARM', 'telegrarm');
+}
+
+/**
+ * Build the admin test message body sent to Telegram.
+ *
+ * @param string $target Settings target key.
+ * @return string
+ */
+function telegrarm_get_test_message_text($target) {
     return sprintf(
-        __('This is a test message from TelegrARM on %s', 'telegrarm'),
+        __('This is a test message for %1$s from TelegrARM on %2$s', 'telegrarm'),
+        telegrarm_get_test_message_target_label($target),
         telegrarm_get_test_message_site_name()
     );
 }
@@ -371,7 +391,7 @@ function telegrarm_ajax_send_test_message() {
     $result = telegrarm_send_telegram_text_message(
         $bot_api_token,
         $channel_id,
-        telegrarm_get_test_message_text()
+        telegrarm_get_test_message_text($target)
     );
 
     if (is_wp_error($result)) {

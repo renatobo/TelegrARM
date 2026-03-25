@@ -68,6 +68,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 
 == Changelog ==
 
+= 0.5.3 =
+- Updated Telegram test messages so they identify whether the validation is for the New user or Profile updates configuration before naming the current website.
+
 = 0.5.2 =
 - Added inline "Send a test message" actions to the New user and Profile updates tabs so each configured Telegram destination can be verified directly from plugin settings.
 - Added Telegram setup guidance that points users to the test-message action when validating bot posting permissions and channel delivery.
@@ -121,6 +124,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.5.3 =
+Clarifies Telegram test deliveries by naming the settings area being validated in each test message.
 
 = 0.5.2 =
 Adds inline Telegram test-message validation for both event tabs and documents the verification step in Telegram setup.
