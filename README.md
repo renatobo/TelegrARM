@@ -14,6 +14,7 @@ WordPress plugin for ARMember that sends Telegram notifications for selected use
   - New registrations (`arm_after_new_user_notification`)
 - Per-event enable/disable toggles from WordPress admin
 - Separate Telegram channel/chat IDs for each event type
+- Inline test-message buttons for the new-user and profile-update channel settings
 - Configurable ARMember key-to-label mapping (JSON)
 - Optional contact push on registration (`sendContact`) with phone normalization
 - Opt-in debug logging for sanitized failure traces during live troubleshooting
@@ -44,6 +45,7 @@ If you already use ARMember and Telegram internally, TelegrARM provides a simple
    - Telegram Bot API token
    - Channel/chat ID for new user notifications
    - Channel/chat ID for profile updates
+   - Use the per-event "Send a test message" button to verify each destination
    - ARMember field mapping JSON
    - Optional registration contact settings
 5. Save settings and test by triggering an ARMember event.

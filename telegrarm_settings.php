@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
 add_action('admin_init', 'telegrarm_settings_init');
 add_action('admin_menu', 'telegrarm_settings_menu');
 add_action('wp_ajax_telegrarm_discover_arm_metakeys', 'telegrarm_ajax_discover_arm_metakeys');
+add_action('wp_ajax_telegrarm_send_test_message', 'telegrarm_ajax_send_test_message');
 
 /**
  * Register plugin settings.
@@ -264,6 +265,162 @@ if (!function_exists('telegrarm_get_telegram_error_message')) {
 
         return $details['description'];
     }
+}
+
+/**
+ * Resolve the site name shown in admin test messages.
+ *
+ * @return string
+ */
+function telegrarm_get_test_message_site_name() {
+    $site_host = parse_url((string) get_option('home', ''), PHP_URL_HOST);
+
+    if (is_string($site_host) && '' !== $site_host) {
+        return sanitize_text_field($site_host);
+    }
+
+    $site_name = get_option('blogname', '');
+
+    if (is_string($site_name) && '' !== trim($site_name)) {
+        return sanitize_text_field($site_name);
+    }
+
+    return __('this website', 'telegrarm');
+}
+
+/**
+ * Build the admin test message body sent to Telegram.
+ *
+ * @return string
+ */
+function telegrarm_get_test_message_text() {
+    return sprintf(
+        __('This is a test message from TelegrARM on %s', 'telegrarm'),
+        telegrarm_get_test_message_site_name()
+    );
+}
+
+/**
+ * Send a plain Telegram message to a configured channel or chat.
+ *
+ * @param string $bot_api_token Telegram bot token.
+ * @param string $channel_id    Telegram channel or chat ID.
+ * @param string $message       Message text.
+ * @return array<string, mixed>|WP_Error
+ */
+function telegrarm_send_telegram_text_message($bot_api_token, $channel_id, $message) {
+    $bot_api_token = telegrarm_sanitize_bot_token($bot_api_token);
+    $channel_id = telegrarm_sanitize_channel_id($channel_id);
+    $message = is_scalar($message) ? trim(sanitize_textarea_field((string) $message)) : '';
+
+    if ('' === $bot_api_token) {
+        return new WP_Error(
+            'telegrarm_missing_bot_token',
+            __('Enter a Telegram bot token before sending a test message.', 'telegrarm')
+        );
+    }
+
+    if ('' === $channel_id) {
+        return new WP_Error(
+            'telegrarm_missing_channel_id',
+            __('Enter a Telegram channel or chat ID before sending a test message.', 'telegrarm')
+        );
+    }
+
+    if ('' === $message) {
+        return new WP_Error(
+            'telegrarm_missing_test_message',
+            __('The test message could not be generated.', 'telegrarm')
+        );
+    }
+
+    $url = "https://api.telegram.org/bot{$bot_api_token}/sendMessage";
+
+    return wp_remote_post(
+        $url,
+        array(
+            'body' => array(
+                'chat_id' => $channel_id,
+                'text'    => $message,
+            ),
+        )
+    );
+}
+
+/**
+ * AJAX endpoint that sends an admin test message to Telegram.
+ *
+ * @return void
+ */
+function telegrarm_ajax_send_test_message() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(
+            array(
+                'message' => __('You do not have permission to send TelegrARM test messages.', 'telegrarm'),
+            ),
+            403
+        );
+    }
+
+    check_ajax_referer('telegrarm_send_test_message');
+
+    $bot_api_token = isset($_POST['bot_token']) ? telegrarm_sanitize_bot_token(wp_unslash($_POST['bot_token'])) : '';
+    $channel_id = isset($_POST['channel_id']) ? telegrarm_sanitize_channel_id(wp_unslash($_POST['channel_id'])) : '';
+    $target = isset($_POST['target']) ? telegrarm_sanitize_setting_text(wp_unslash($_POST['target'])) : '';
+
+    $result = telegrarm_send_telegram_text_message(
+        $bot_api_token,
+        $channel_id,
+        telegrarm_get_test_message_text()
+    );
+
+    if (is_wp_error($result)) {
+        telegrarm_log_debug_message(
+            'Admin test Telegram message request failed before response.',
+            array(
+                'action' => 'sendMessage',
+                'target' => $target,
+                'error'  => $result->get_error_message(),
+                'code'   => $result->get_error_code(),
+            )
+        );
+
+        wp_send_json_error(
+            array(
+                'message' => $result->get_error_message(),
+            ),
+            400
+        );
+    }
+
+    $telegram_response = telegrarm_get_telegram_response_details($result);
+
+    if (200 !== $telegram_response['status_code'] || true !== $telegram_response['ok']) {
+        telegrarm_log_debug_message(
+            'Admin test Telegram message request was unsuccessful.',
+            array(
+                'action'      => 'sendMessage',
+                'target'      => $target,
+                'status_code' => $telegram_response['status_code'],
+                'telegram_ok' => $telegram_response['ok'],
+                'error_code'  => $telegram_response['error_code'],
+                'description' => $telegram_response['description'],
+            )
+        );
+
+        wp_send_json_error(
+            array(
+                'message' => $telegram_response['description'],
+            ),
+            400
+        );
+    }
+
+    wp_send_json_success(
+        array(
+            'message' => __('Test message sent successfully.', 'telegrarm'),
+        )
+    );
 }
 
 /**
@@ -1090,6 +1247,19 @@ function telegrarm_settings_page_cb() {
                             />
                             <span class="description"><?php esc_html_e('Use a numeric chat ID like -1001234567890 or a channel username such as @yourchannel.', 'telegrarm'); ?></span>
                         </label>
+
+                        <div class="telegrarm-test-message">
+                            <button
+                                type="button"
+                                class="button button-secondary telegrarm-test-message-button"
+                                data-channel-input="telegram_channel_id_newuser"
+                                data-target="new-user"
+                            >
+                                <?php esc_html_e('Send a test message', 'telegrarm'); ?>
+                            </button>
+                            <p class="description"><?php esc_html_e('A test message will be sent to this channel to make sure it works.', 'telegrarm'); ?></p>
+                            <div class="telegrarm-test-message-status" aria-live="polite"></div>
+                        </div>
                     </div>
 
                     <div class="telegrarm-card">
@@ -1173,6 +1343,19 @@ function telegrarm_settings_page_cb() {
                             />
                             <span class="description"><?php esc_html_e('Messages include only keys that are present in the ARMember mapping tab.', 'telegrarm'); ?></span>
                         </label>
+
+                        <div class="telegrarm-test-message">
+                            <button
+                                type="button"
+                                class="button button-secondary telegrarm-test-message-button"
+                                data-channel-input="telegram_channel_id_updates"
+                                data-target="profile"
+                            >
+                                <?php esc_html_e('Send a test message', 'telegrarm'); ?>
+                            </button>
+                            <p class="description"><?php esc_html_e('A test message will be sent to this channel to make sure it works.', 'telegrarm'); ?></p>
+                            <div class="telegrarm-test-message-status" aria-live="polite"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -1208,6 +1391,7 @@ function telegrarm_settings_page_cb() {
                             </div>
 
                             <p class="description"><?php esc_html_e('Use the results below to select the keys you want, edit their labels, and generate the JSON back into the textarea above.', 'telegrarm'); ?></p>
+                            <p class="description"><?php esc_html_e('Need a specific message order? Drag the Move control in the results table to rearrange fields before building the JSON.', 'telegrarm'); ?></p>
 
                             <div class="telegrarm-mapping-tools">
                                 <button type="button" class="button" id="telegrarm-select-all-metakeys"><?php esc_html_e('Select all', 'telegrarm'); ?></button>
@@ -1252,6 +1436,9 @@ function telegrarm_settings_page_cb() {
                             <li><?php esc_html_e('Add the bot to your target channel or group and grant it permission to post messages.', 'telegrarm'); ?></li>
                             <li><?php esc_html_e('Use the target chat ID or @channel username in the event tabs above.', 'telegrarm'); ?></li>
                         </ol>
+                        <p class="telegrarm-note">
+                            <?php esc_html_e('After entering the bot token and channel ID, use the Send a test message button in the New user or Profile updates tab to confirm the bot can receive requests and post into the specified channel.', 'telegrarm'); ?>
+                        </p>
                         <p class="telegrarm-note">
                             <?php esc_html_e('Reference:', 'telegrarm'); ?>
                             <a href="https://core.telegram.org/bots/tutorial#introduction" target="_blank" rel="noopener noreferrer">core.telegram.org/bots/tutorial#introduction</a>.
@@ -1405,6 +1592,17 @@ function telegrarm_settings_page_cb() {
                 margin-top: 18px;
             }
 
+            .telegrarm-test-message {
+                display: grid;
+                gap: 8px;
+                margin-top: -6px;
+            }
+
+            .telegrarm-test-message-status {
+                min-height: 20px;
+                color: #475569;
+            }
+
             .telegrarm-mapping-tools {
                 display: flex;
                 flex-wrap: wrap;
@@ -1483,6 +1681,47 @@ function telegrarm_settings_page_cb() {
                 padding: 14px;
                 border: 1px solid #dcdcde;
                 background: #ffffff;
+            }
+
+            .telegrarm-metakeys-table tr.is-dragging {
+                opacity: 0.55;
+            }
+
+            .telegrarm-metakeys-table tr.is-drop-target td {
+                border-top: 2px solid #2271b1;
+            }
+
+            .telegrarm-metakeys-table td.telegrarm-order-cell,
+            .telegrarm-metakeys-table th.telegrarm-order-cell {
+                width: 76px;
+                text-align: center;
+            }
+
+            .telegrarm-drag-handle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 54px;
+                min-height: 32px;
+                padding: 0 10px;
+                border: 1px solid #c3c4c7;
+                border-radius: 4px;
+                background: #f6f7f7;
+                color: #1d2327;
+                cursor: grab;
+                font-size: 12px;
+                font-weight: 600;
+                line-height: 1;
+                user-select: none;
+            }
+
+            .telegrarm-drag-handle:focus {
+                outline: 2px solid #2271b1;
+                outline-offset: 1px;
+            }
+
+            .telegrarm-drag-handle:active {
+                cursor: grabbing;
             }
 
             .telegrarm-field {
@@ -1577,10 +1816,13 @@ function telegrarm_settings_page_cb() {
             const selectAllButton = document.getElementById('telegrarm-select-all-metakeys');
             const selectNoneButton = document.getElementById('telegrarm-select-none-metakeys');
             const buildButton = document.getElementById('telegrarm-build-mapping');
+            const botTokenInput = document.getElementById('telegram_bot_api_token');
             const statusNode = document.getElementById('telegrarm-metakeys-status');
             const resultsNode = document.getElementById('telegrarm-metakeys-results');
+            const testMessageButtons = document.querySelectorAll('.telegrarm-test-message-button');
             const ajaxUrl = window.ajaxurl || <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
             const ajaxNonce = <?php echo wp_json_encode(wp_create_nonce('telegrarm_discover_arm_metakeys')); ?>;
+            const testMessageNonce = <?php echo wp_json_encode(wp_create_nonce('telegrarm_send_test_message')); ?>;
             const existingMapping = <?php echo wp_json_encode(telegrarm_get_arm_mapping(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
             const i18n = <?php echo wp_json_encode(
                 array(
@@ -1597,8 +1839,15 @@ function telegrarm_settings_page_cb() {
                     'noCandidates' => __('No candidate ARMember fields were found on this site yet.', 'telegrarm'),
                     'preset' => __('Preset', 'telegrarm'),
                     'requestFailed' => __('Request failed with status %d.', 'telegrarm'),
+                    'reorder' => __('Order', 'telegrarm'),
+                    'reorderHint' => __('Drag the Move control to rearrange the selected field order before building the JSON.', 'telegrarm'),
+                    'reorderMove' => __('Move', 'telegrarm'),
                     'selectAtLeastOne' => __('Select at least one field before building the JSON.', 'telegrarm'),
+                    'sendingTestMessage' => __('Sending test message...', 'telegrarm'),
                     'source' => __('Source', 'telegrarm'),
+                    'testMessageMissingBotToken' => __('Enter a bot token before sending a test message.', 'telegrarm'),
+                    'testMessageMissingChannel' => __('Enter a channel or chat ID before sending a test message.', 'telegrarm'),
+                    'unknownTestMessageError' => __('Unable to send the test message.', 'telegrarm'),
                     'unexpectedResponse' => __('Unexpected response from the discovery endpoint.', 'telegrarm'),
                     'unknownDiscoveryError' => __('Unable to discover ARMember fields.', 'telegrarm'),
                     'use' => __('Use', 'telegrarm'),
@@ -1638,6 +1887,92 @@ function telegrarm_settings_page_cb() {
                 statusNode.style.color = isError ? '#b32d2e' : '';
             }
 
+            function setScopedStatus(node, message, isError) {
+                if (!node) {
+                    return;
+                }
+
+                node.textContent = message || '';
+                node.style.color = isError ? '#b32d2e' : '';
+            }
+
+            function enableRowReordering(tbody) {
+                if (!tbody) {
+                    return;
+                }
+
+                let draggedRow = null;
+                let dropTargetRow = null;
+
+                function clearDropTarget() {
+                    if (dropTargetRow) {
+                        dropTargetRow.classList.remove('is-drop-target');
+                        dropTargetRow = null;
+                    }
+                }
+
+                tbody.querySelectorAll('tr').forEach(function (row) {
+                    const handle = row.querySelector('.telegrarm-drag-handle');
+
+                    if (!handle) {
+                        return;
+                    }
+
+                    handle.draggable = true;
+
+                    handle.addEventListener('dragstart', function (event) {
+                        draggedRow = row;
+                        row.classList.add('is-dragging');
+
+                        if (event.dataTransfer) {
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', row.dataset.key || '');
+                        }
+                    });
+
+                    handle.addEventListener('dragend', function () {
+                        row.classList.remove('is-dragging');
+                        draggedRow = null;
+                        clearDropTarget();
+                    });
+
+                    row.addEventListener('dragover', function (event) {
+                        if (!draggedRow || draggedRow === row) {
+                            return;
+                        }
+
+                        event.preventDefault();
+
+                        if (dropTargetRow && dropTargetRow !== row) {
+                            dropTargetRow.classList.remove('is-drop-target');
+                        }
+
+                        dropTargetRow = row;
+                        dropTargetRow.classList.add('is-drop-target');
+                    });
+
+                    row.addEventListener('drop', function (event) {
+                        const bounds = row.getBoundingClientRect();
+                        const shouldInsertBefore = event.clientY < bounds.top + (bounds.height / 2);
+
+                        event.preventDefault();
+
+                        if (!draggedRow || draggedRow === row) {
+                            clearDropTarget();
+                            return;
+                        }
+
+                        if (shouldInsertBefore) {
+                            tbody.insertBefore(draggedRow, row);
+                        } else {
+                            tbody.insertBefore(draggedRow, row.nextSibling);
+                        }
+
+                        clearDropTarget();
+                    });
+                });
+            }
+
             function renderMetakeys(items) {
                 if (!resultsNode) {
                     return;
@@ -1654,10 +1989,18 @@ function telegrarm_settings_page_cb() {
                 const table = document.createElement('table');
                 table.className = 'telegrarm-metakeys-table';
 
+                const reorderHint = document.createElement('p');
+                reorderHint.className = 'description';
+                reorderHint.textContent = i18n.reorderHint;
+                resultsNode.appendChild(reorderHint);
+
                 const thead = document.createElement('thead');
                 const headRow = document.createElement('tr');
-                [i18n.use, i18n.metaKey, i18n.label, i18n.source].forEach(function (title) {
+                [i18n.reorder, i18n.use, i18n.metaKey, i18n.label, i18n.source].forEach(function (title, index) {
                     const th = document.createElement('th');
+                    if (index === 0) {
+                        th.className = 'telegrarm-order-cell';
+                    }
                     th.textContent = title;
                     headRow.appendChild(th);
                 });
@@ -1669,6 +2012,17 @@ function telegrarm_settings_page_cb() {
                 items.forEach(function (item) {
                     const row = document.createElement('tr');
                     row.dataset.key = item.key || '';
+
+                    const orderCell = document.createElement('td');
+                    orderCell.className = 'telegrarm-order-cell';
+                    const dragHandle = document.createElement('span');
+                    dragHandle.className = 'telegrarm-drag-handle';
+                    dragHandle.textContent = i18n.reorderMove;
+                    dragHandle.setAttribute('role', 'button');
+                    dragHandle.setAttribute('tabindex', '0');
+                    dragHandle.setAttribute('aria-label', (i18n.reorderMove || 'Move') + ': ' + (item.key || ''));
+                    orderCell.appendChild(dragHandle);
+                    row.appendChild(orderCell);
 
                     const checkCell = document.createElement('td');
                     const checkbox = document.createElement('input');
@@ -1714,6 +2068,7 @@ function telegrarm_settings_page_cb() {
 
                 table.appendChild(tbody);
                 resultsNode.appendChild(table);
+                enableRowReordering(tbody);
             }
 
             function collectSelectedMapping() {
@@ -1849,6 +2204,91 @@ function telegrarm_settings_page_cb() {
 
             if (resultsNode && Object.keys(existingMapping).length > 0) {
                 setStatus(formatCountMessage(i18n.currentMappingCountSingular, i18n.currentMappingCountPlural, Object.keys(existingMapping).length));
+            }
+
+            if (testMessageButtons.length) {
+                testMessageButtons.forEach(function (button) {
+                    const testMessageContainer = button.closest('.telegrarm-test-message');
+                    const statusTarget = testMessageContainer ? testMessageContainer.querySelector('.telegrarm-test-message-status') : null;
+                    const channelInput = document.getElementById(button.getAttribute('data-channel-input') || '');
+
+                    if (channelInput) {
+                        channelInput.addEventListener('input', function () {
+                            setScopedStatus(statusTarget, '', false);
+                        });
+                    }
+
+                    button.addEventListener('click', function () {
+                        const botToken = botTokenInput && botTokenInput.value ? botTokenInput.value.trim() : '';
+                        const channelId = channelInput && channelInput.value ? channelInput.value.trim() : '';
+                        const previousLabel = button.textContent;
+
+                        if (!botToken) {
+                            setScopedStatus(statusTarget, i18n.testMessageMissingBotToken, true);
+
+                            if (botTokenInput) {
+                                botTokenInput.focus();
+                            }
+
+                            return;
+                        }
+
+                        if (!channelId) {
+                            setScopedStatus(statusTarget, i18n.testMessageMissingChannel, true);
+
+                            if (channelInput) {
+                                channelInput.focus();
+                            }
+
+                            return;
+                        }
+
+                        setScopedStatus(statusTarget, i18n.sendingTestMessage, false);
+                        button.disabled = true;
+                        button.textContent = i18n.sendingTestMessage;
+
+                        const body = new URLSearchParams();
+                        body.set('action', 'telegrarm_send_test_message');
+                        body.set('_ajax_nonce', testMessageNonce);
+                        body.set('bot_token', botToken);
+                        body.set('channel_id', channelId);
+                        body.set('target', button.getAttribute('data-target') || '');
+
+                        fetch(ajaxUrl, {
+                            credentials: 'same-origin',
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            },
+                            body: body.toString(),
+                        })
+                            .then(function (response) {
+                                return response.json()
+                                    .catch(function () {
+                                        throw new Error(formatMessage(i18n.requestFailed, response.status));
+                                    })
+                                    .then(function (payload) {
+                                        if (!response.ok || !payload || !payload.success) {
+                                            const message = payload && payload.data && payload.data.message ? payload.data.message : formatMessage(i18n.requestFailed, response.status);
+                                            throw new Error(message);
+                                        }
+
+                                        return payload;
+                                    });
+                            })
+                            .then(function (payload) {
+                                const message = payload && payload.data && payload.data.message ? payload.data.message : i18n.unknownTestMessageError;
+                                setScopedStatus(statusTarget, message, false);
+                            })
+                            .catch(function (error) {
+                                setScopedStatus(statusTarget, error.message || i18n.unknownTestMessageError, true);
+                            })
+                            .finally(function () {
+                                button.disabled = false;
+                                button.textContent = previousLabel;
+                            });
+                    });
+                });
             }
 
             function activateTab(targetPanel, updateHash) {

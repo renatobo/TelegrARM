@@ -1,13 +1,15 @@
 # WordPress.org Submission Checklist
 
-Release prepared in this repository: `0.5.1`
+Release prepared in this repository: `0.5.2`
 
 Submission ZIP:
-- `/Users/renatobo/development/TelegrARM/TelegrARM-v0.5.1.zip`
+- `/Users/renatobo/development/TelegrARM/TelegrARM-v0.5.2.zip`
 
 What is already prepared:
-- Plugin version bumped to `0.5.1` in `telegrarm.php` and `readme.txt`.
-- `readme.txt` updated with a `0.5.1` changelog and upgrade notice.
+- Plugin version bumped to `0.5.2` in `telegrarm.php` and `readme.txt`.
+- `readme.txt` updated with a `0.5.2` changelog and upgrade notice.
+- Added inline Telegram test-message actions in the New user and Profile updates settings tabs.
+- Added Telegram setup guidance for using the test-message action to confirm the bot can post in the target channel.
 - Added opt-in debug logging for sanitized production troubleshooting.
 - Added an ARMember field discovery UI to reduce manual JSON entry.
 - Updated discovery to read ARMember registry data first, then form-field definitions, before falling back to usermeta scanning.

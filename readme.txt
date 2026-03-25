@@ -22,6 +22,7 @@ Supported notifications:
 Key capabilities:
 - Enable/disable each event type independently
 - Configure separate Telegram channel/chat IDs per event type
+- Send an inline test message from each event tab to verify the Telegram destination
 - Map ARMember fields to human-friendly labels using JSON
 - Optional Telegram contact card send on registration
 - Opt-in debug logging for sanitized production troubleshooting
@@ -42,6 +43,7 @@ External services:
    - Telegram Bot API Token
    - Channel/chat ID for new users
    - Channel/chat ID for profile updates
+   - Use the per-event "Send a test message" button to verify each destination
    - ARMember key mapping JSON
    - Optional contact settings
 5. Save settings.
@@ -65,6 +67,10 @@ Yes. Enable **Send contact on new user registration?**, then configure the phone
 Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 0.5.2 =
+- Added inline "Send a test message" actions to the New user and Profile updates tabs so each configured Telegram destination can be verified directly from plugin settings.
+- Added Telegram setup guidance that points users to the test-message action when validating bot posting permissions and channel delivery.
 
 = 0.5.1 =
 - Reissued the release from the correct commit so GitHub release assets and WordPress updates resolve to the current plugin version.
@@ -115,6 +121,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 0.5.2 =
+Adds inline Telegram test-message validation for both event tabs and documents the verification step in Telegram setup.
 
 = 0.5.1 =
 Republishes the release from the correct commit so dashboard updates download the right package.
