@@ -36,7 +36,7 @@ jobs:
           set -e
           VERSION=${{ steps.extract_version.outputs.version }}
           HEADER_VERSION="$(sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' telegrarm.php | head -n 1)"
-          CONSTANT_VERSION="$(sed -n "s/^define('BONO_TELEGRARM_VERSION', '\(.*\)');$/\1/p" telegrarm.php | head -n 1)"
+          CONSTANT_VERSION="$(sed -n "s/^define( 'BONO_TELEGRARM_VERSION', '\(.*\)' );$/\1/p" telegrarm.php | head -n 1)"
           STABLE_TAG_VERSION="$(sed -n 's/^Stable tag: //p' readme.txt | head -n 1)"
           README_VERSION="$(sed -n 's/^Version: //p' readme.txt | head -n 1)"
 
@@ -73,6 +73,11 @@ jobs:
             exit 1
           fi
           echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Validate plugin package
+        run: |
+          chmod +x scripts/validate-package
+          ./scripts/validate-package "${{ steps.build.outputs.zip_path }}"
 
       - name: Create GitHub release and upload asset
         uses: softprops/action-gh-release@v3

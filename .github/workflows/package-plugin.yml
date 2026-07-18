@@ -27,6 +27,11 @@ jobs:
           fi
           echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Validate plugin package
+        run: |
+          chmod +x scripts/validate-package
+          ./scripts/validate-package "${{ steps.build.outputs.zip_path }}"
+
       - name: Create GitHub release and upload asset
         uses: softprops/action-gh-release@v3
         with:

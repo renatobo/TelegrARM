@@ -6,8 +6,8 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| < 0.2.0 | :x:                |
+| 1.0.x   | :white_check_mark: |
+| < 1.0.0 | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -56,7 +56,8 @@ Please include the following information in your report:
 
 ### Bot Token Security
 
-- Store bot tokens securely in WordPress options (never in code)
+- Prefer the `TELEGRARM_BOT_TOKEN` constant or `telegrarm_bot_token` filter for production secrets
+- Saved bot tokens use non-autoloaded WordPress option storage and are never redisplayed in the settings page
 - Regenerate bot tokens if exposed
 - Use environment variables for tokens in development environments
 - Never commit tokens to version control
@@ -114,15 +115,16 @@ The plugin sanitizes and validates:
 - ✅ Output escaping in admin interfaces
 - ✅ Nonce verification for form submissions
 - ✅ Capability checks for admin pages
-- ✅ Secure option storage for sensitive data
+- ✅ Non-autoloaded option storage plus constant/filter overrides for sensitive data
 - ✅ HTTPS-only API communications with Telegram
 - ✅ Safe uninstall process with option cleanup
 
-### Planned Enhancements
+### Delivery Hardening
 
-- Rate limiting for API calls
-- Enhanced error logging with security context
-- Webhook signature verification (if webhooks are added)
+- Bounded background retries for transient failures
+- Telegram 429 retry handling and per-chat pacing
+- Short outbound request timeouts and redirect blocking
+- Structured, redacted debug context
 
 ## Vulnerability Disclosure History
 
@@ -130,6 +132,6 @@ No security vulnerabilities have been reported or disclosed to date.
 
 ---
 
-**Last Updated:** 2026-01-31
+**Last Updated:** 2026-07-18
 
 For general questions about this security policy, please open a public GitHub issue.

@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<ruleset name="TelegrARM">
+    <description>WordPress Coding Standards for TelegrARM runtime code.</description>
+    <rule ref="WordPress" />
+    <rule ref="WordPress-Docs" />
+    <!-- Public compatibility files intentionally retain their historical underscore names. -->
+    <rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+        <exclude-pattern>*</exclude-pattern>
+    </rule>
+    <arg name="extensions" value="php" />
+    <file>telegrarm.php</file>
+    <file>telegrarm_settings.php</file>
+    <file>telegrarm_after_new_user_notification.php</file>
+    <file>telegrarm_update_profile_external.php</file>
+    <file>uninstall.php</file>
+    <file>includes</file>
+    <file>admin</file>
+    <exclude-pattern>stubs/*</exclude-pattern>
+    <exclude-pattern>tests/*</exclude-pattern>
+</ruleset>

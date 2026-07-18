@@ -1,285 +1,111 @@
 <?php
 /**
- * Notify on new user registration.
- */
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
-/**
- * Escape plain text for Telegram HTML parse mode.
+ * Queue Telegram notifications after ARMember registration.
  *
- * @param mixed $value Raw value.
- * @return string
+ * @package TelegrARM
  */
-if (!function_exists('telegrarm_escape_telegram_html_text')) {
-    function telegrarm_escape_telegram_html_text($value) {
-        if (!is_scalar($value)) {
-            return '';
-        }
 
-        return esc_html((string) $value);
-    }
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
 /**
- * Build a Telegram-safe profile line for special fields.
+ * Backward-compatible registration profile-line formatter.
  *
  * @param string $key   Meta key.
  * @param mixed  $value Meta value.
  * @param array  $map   Allowed field mapping.
  * @return string
  */
-function telegrarm_build_registration_profile_line($key, $value, $map) {
-    if (!is_scalar($value)) {
-        return '';
-    }
-
-    $value_string = trim((string) $value);
-
-    if ('' === $value_string) {
-        return '';
-    }
-
-    if ('arm_social_field_instagram' === $key) {
-        $username = preg_replace('/[^A-Za-z0-9._]/', '', $value_string);
-
-        if (is_string($username) && '' !== $username) {
-            $username_html = telegrarm_escape_telegram_html_text($username);
-
-            return "IG: <a href=\"https://instagram.com/{$username}\">@{$username_html}</a>\n";
-        }
-
-        return "IG: " . telegrarm_escape_telegram_html_text($value_string) . "\n";
-    }
-
-    if ('avatar' === $key) {
-        $avatar_url = $value_string;
-
-        if (!preg_match('#^https?://#i', $avatar_url)) {
-            $avatar_url = 'https://' . ltrim($avatar_url, '/');
-        }
-
-        $validated_url = wp_http_validate_url($avatar_url);
-
-        if ($validated_url) {
-            $display_url = telegrarm_escape_telegram_html_text($validated_url);
-
-            return 'avatar: <a href="' . esc_url($validated_url) . '">' . $display_url . "</a>\n";
-        }
-
-        return 'avatar: ' . telegrarm_escape_telegram_html_text($value_string) . "\n";
-    }
-
-    if (isset($map[$key])) {
-        $label = telegrarm_escape_telegram_html_text($map[$key]);
-        $safe_value = telegrarm_escape_telegram_html_text($value_string);
-
-        return "{$label}: {$safe_value}\n";
-    }
-
-    return '';
+function telegrarm_build_registration_profile_line( $key, $value, $map ) {
+	return is_array( $map ) ? TelegrARM_Message_Formatter::profile_line( $key, $value, $map ) : '';
 }
 
 /**
- * Extract a readable Telegram API error without triggering notices.
+ * Normalize scalar WordPress user metadata.
  *
- * @param array<string, mixed>|mixed $response HTTP response.
- * @return string
+ * @param int $user_id User ID.
+ * @return array<string, scalar>
  */
-if (!function_exists('telegrarm_get_telegram_error_message')) {
-    function telegrarm_get_telegram_error_message($response) {
-        if (!is_array($response)) {
-            return __('Unknown Telegram API error.', 'telegrarm');
-        }
+function telegrarm_get_registration_meta( $user_id ) {
+	$raw_meta = get_user_meta( (int) $user_id );
+	$meta     = array();
 
-        $body = wp_remote_retrieve_body($response);
+	if ( ! is_array( $raw_meta ) ) {
+		return $meta;
+	}
 
-        if (!is_string($body) || '' === $body) {
-            return __('Unknown Telegram API error.', 'telegrarm');
-        }
+	foreach ( $raw_meta as $key => $values ) {
+		if ( ! is_string( $key ) || ! is_array( $values ) || ! isset( $values[0] ) || ! is_scalar( $values[0] ) ) {
+			continue;
+		}
 
-        $decoded = json_decode($body, true);
+		$meta[ $key ] = $values[0];
+	}
 
-        if (is_array($decoded) && !empty($decoded['description']) && is_scalar($decoded['description'])) {
-            return sanitize_text_field((string) $decoded['description']);
-        }
-
-        return __('Unknown Telegram API error.', 'telegrarm');
-    }
+	return $meta;
 }
 
 /**
- * Send the registration notification.
+ * Queue the new-user notification and optional contact card.
  *
  * @param object $user User object from ARMember.
  * @return void
  */
-function telegrarm_after_new_user_notification($user) {
-    telegrarm_log_debug_message(
-        'New-user handler received event.',
-        array(
-            'has_object' => is_object($user),
-            'user_id'    => is_object($user) && isset($user->ID) ? (int) $user->ID : null,
-        )
-    );
+function telegrarm_after_new_user_notification( $user ) {
+	if ( ! is_object( $user ) || ! isset( $user->ID, $user->user_login ) || ! is_scalar( $user->user_login ) ) {
+		TelegrARM_Debug_Logger::log( 'New-user handler skipped: invalid payload.' );
+		return;
+	}
 
-    if (!is_object($user) || !isset($user->ID, $user->user_login)) {
-        telegrarm_log_debug_message(
-            'New-user handler skipped: invalid payload.',
-            array(
-                'has_object' => is_object($user),
-                'has_id'     => is_object($user) && isset($user->ID),
-                'has_login'  => is_object($user) && isset($user->user_login),
-            )
-        );
+	$mapping = get_option( 'telegrarm_arm_mapping', array() );
 
-        return;
-    }
+	if ( '' === TelegrARM_Config::get_bot_token() || '' === TelegrARM_Config::get_channel_id( 'new-user' ) || ! is_array( $mapping ) ) {
+		TelegrARM_Debug_Logger::log( 'New-user handler skipped: incomplete configuration.' );
+		return;
+	}
 
-    $bot_api_token    = (string) get_option('telegram_bot_api_token', '');
-    $channel_id       = (string) get_option('telegram_channel_id_newuser', '');
-    $arm_allowed_keys = get_option('telegrarm_arm_mapping', array());
+	$meta    = telegrarm_get_registration_meta( (int) $user->ID );
+	$message = TelegrARM_Message_Formatter::profile_message(
+		/* translators: 1: User login. 2: Numeric user ID. */
+		sprintf( __( 'New user registered: %1$s [%2$d]', 'telegrarm' ), (string) $user->user_login, (int) $user->ID ),
+		$meta,
+		$mapping
+	);
 
-    if ('' === $bot_api_token || '' === $channel_id || !is_array($arm_allowed_keys)) {
-        telegrarm_log_debug_message(
-            'New-user handler skipped: missing configuration.',
-            array(
-                'bot_token_set'   => '' !== $bot_api_token,
-                'channel_id_set'   => '' !== $channel_id,
-                'mapping_is_array' => is_array($arm_allowed_keys),
-            )
-        );
+	TelegrARM_Delivery_Queue::enqueue(
+		'sendMessage',
+		'new-user',
+		array(
+			'parse_mode' => 'HTML',
+			'text'       => $message,
+		)
+	);
 
-        return;
-    }
+	if ( ! (bool) get_option( 'telegram_send_contact_during_registration', false ) ) {
+		return;
+	}
 
-    $meta = get_user_meta($user->ID);
-    $meta = array_filter(
-        array_map(
-            static function ($item) {
-                return is_array($item) && isset($item[0]) ? $item[0] : '';
-            },
-            $meta
-        ),
-        static function ($item) {
-            return '' !== $item && null !== $item;
-        }
-    );
+	$phone_field = (string) get_option( 'telegram_phone_field_name', 'text_t0cls' );
+	$phone       = isset( $meta[ $phone_field ] ) && is_scalar( $meta[ $phone_field ] ) ? preg_replace( '/[^0-9+]/', '', (string) $meta[ $phone_field ] ) : '';
 
-    $user_login = maybe_unserialize($user->user_login);
-    $text       = sprintf(
-        'New user registered: %s [%d]',
-        is_scalar($user_login) ? (string) $user_login : '',
-        (int) $user->ID
-    );
-    $profile    = '';
-    $url        = "https://api.telegram.org/bot{$bot_api_token}/sendMessage";
+	if ( ! is_string( $phone ) || '' === $phone ) {
+		TelegrARM_Debug_Logger::log( 'New-user contact skipped: phone number missing.' );
+		return;
+	}
 
-    foreach ($meta as $key => $value) {
-        $profile .= telegrarm_build_registration_profile_line($key, $value, $arm_allowed_keys);
-    }
+	if ( 0 !== strpos( $phone, '+' ) ) {
+		$default_code = preg_replace( '/[^0-9+]/', '', (string) get_option( 'telegram_international_code_if_missing', '+1' ) );
+		$phone        = ( is_string( $default_code ) ? $default_code : '+1' ) . $phone;
+	}
 
-    $post_data = array(
-        'chat_id'    => $channel_id,
-        'parse_mode' => 'HTML',
-        'text'       => '<b>' . telegrarm_escape_telegram_html_text($text) . "</b>\n" . $profile,
-    );
-
-    $result = wp_remote_post($url, array('body' => $post_data));
-
-    if (is_wp_error($result)) {
-        telegrarm_log_debug_message(
-            'New-user Telegram message request failed.',
-            array(
-                'action' => 'sendMessage',
-                'error'  => $result->get_error_message(),
-                'code'   => $result->get_error_code(),
-            )
-        );
-
-        return;
-    }
-
-    $telegram_response = telegrarm_get_telegram_response_details($result);
-
-    if (200 !== $telegram_response['status_code'] || true !== $telegram_response['ok']) {
-        telegrarm_log_debug_message(
-            'New-user Telegram message request was unsuccessful.',
-            array(
-                'action'      => 'sendMessage',
-                'status_code' => $telegram_response['status_code'],
-                'telegram_ok' => $telegram_response['ok'],
-                'error_code'  => $telegram_response['error_code'],
-                'description' => $telegram_response['description'],
-            )
-        );
-
-        return;
-    }
-
-    $send_contact = get_option('telegram_send_contact_during_registration', false);
-
-    if (!$send_contact) {
-        return;
-    }
-
-    $phone_field_name = (string) get_option('telegram_phone_field_name', 'text_t0cls');
-    $default_code     = (string) get_option('telegram_international_code_if_missing', '+1');
-    $phone            = isset($meta[$phone_field_name]) && is_scalar($meta[$phone_field_name]) ? (string) $meta[$phone_field_name] : '';
-
-    if ('' !== $phone && 0 !== strpos($phone, '+')) {
-        $phone = $default_code . $phone;
-    }
-
-    if ('' === $phone) {
-        telegrarm_log_debug_message(
-            'New-user contact card skipped: phone number missing.',
-            array(
-                'phone_field_name' => $phone_field_name,
-            )
-        );
-
-        return;
-    }
-
-    $url = "https://api.telegram.org/bot{$bot_api_token}/sendContact";
-
-    $post_data = array(
-        'chat_id'      => $channel_id,
-        'phone_number' => $phone,
-        'first_name'   => isset($meta['first_name']) && is_scalar($meta['first_name']) ? (string) $meta['first_name'] : '',
-        'last_name'    => isset($meta['last_name']) && is_scalar($meta['last_name']) ? (string) $meta['last_name'] : '',
-    );
-
-    $result = wp_remote_post($url, array('body' => $post_data));
-
-    if (is_wp_error($result)) {
-        telegrarm_log_debug_message(
-            'New-user contact request failed.',
-            array(
-                'action' => 'sendContact',
-                'error'  => $result->get_error_message(),
-                'code'   => $result->get_error_code(),
-            )
-        );
-
-        return;
-    }
-
-    $telegram_response = telegrarm_get_telegram_response_details($result);
-
-    if (200 !== $telegram_response['status_code'] || true !== $telegram_response['ok']) {
-        telegrarm_log_debug_message(
-            'New-user contact request was unsuccessful.',
-            array(
-                'action'      => 'sendContact',
-                'status_code' => $telegram_response['status_code'],
-                'telegram_ok' => $telegram_response['ok'],
-                'error_code'  => $telegram_response['error_code'],
-                'description' => $telegram_response['description'],
-            )
-        );
-    }
+	TelegrARM_Delivery_Queue::enqueue(
+		'sendContact',
+		'new-user',
+		array(
+			'phone_number' => $phone,
+			'first_name'   => isset( $meta['first_name'] ) ? (string) $meta['first_name'] : '',
+			'last_name'    => isset( $meta['last_name'] ) ? (string) $meta['last_name'] : '',
+		)
+	);
 }

@@ -41,7 +41,7 @@ extract_plugin_header_version() {
 }
 
 extract_plugin_constant_version() {
-  sed -n "s/^define('BONO_TELEGRARM_VERSION', '\\(.*\\)');$/\\1/p" "telegrarm.php" | head -n 1
+  sed -n "s/^define( 'BONO_TELEGRARM_VERSION', '\\(.*\\)' );$/\\1/p" "telegrarm.php" | head -n 1
 }
 
 extract_stable_tag_version() {
@@ -77,7 +77,7 @@ assert_versions_match() {
 update_file "readme.txt" "^Stable tag: .*" "Stable tag: $VERSION"
 update_file "readme.txt" "^Version: .*" "Version: $VERSION"
 update_file "telegrarm.php" "^[[:space:]]*\\*[[:space:]]*Version:[[:space:]]*.*" " * Version:           $VERSION"
-update_file "telegrarm.php" "^define('BONO_TELEGRARM_VERSION', '.*');$" "define('BONO_TELEGRARM_VERSION', '$VERSION');"
+update_file "telegrarm.php" "^define( 'BONO_TELEGRARM_VERSION', '.*' );$" "define( 'BONO_TELEGRARM_VERSION', '$VERSION' );"
 
 assert_versions_match
 

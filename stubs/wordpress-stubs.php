@@ -6,12 +6,20 @@
  */
 
 class WP_Error {
+    private string|int $code;
+    private string $message;
+
+    public function __construct(string $code = '', string $message = '', $data = '') {
+        $this->code = $code;
+        $this->message = $message;
+    }
+
     public function get_error_message(string $code = ''): string {
-        return '';
+        return $this->message;
     }
 
     public function get_error_code(): string|int {
-        return '';
+        return $this->code;
     }
 }
 
@@ -29,12 +37,38 @@ function add_filter(string $hook_name, $callback, int $priority = 10, int $accep
     return true;
 }
 
+function apply_filters(string $hook_name, $value, ...$args) {
+    return $value;
+}
+
+function register_activation_hook(string $file, $callback): void {}
+
+function is_admin(): bool {
+    return true;
+}
+
 /**
  * @param mixed $default_value
  * @return mixed
  */
 function get_option(string $option, $default_value = false) {
+    if (isset($GLOBALS['telegrarm_test_options']) && is_array($GLOBALS['telegrarm_test_options']) && array_key_exists($option, $GLOBALS['telegrarm_test_options'])) {
+        return $GLOBALS['telegrarm_test_options'][$option];
+    }
+
     return $default_value;
+}
+
+function add_option(string $option, $value = '', string $deprecated = '', bool $autoload = true): bool {
+    return true;
+}
+
+function update_option(string $option, $value, ?bool $autoload = null): bool {
+    return true;
+}
+
+function wp_set_option_autoload_values(array $options): array {
+    return array();
 }
 
 function delete_option(string $option): bool {
@@ -51,7 +85,7 @@ function settings_fields(string $option_group): void {}
 function add_settings_error(string $setting, string $code, string $message, string $type = 'error'): void {}
 
 function esc_html(string $text): string {
-    return $text;
+    return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function esc_attr(string $text): string {
@@ -75,7 +109,9 @@ function sanitize_textarea_field(string $str): string {
  * @return array<string, mixed>|WP_Error
  */
 function wp_remote_post(string $url, array $args = array()) {
-    return array();
+    $GLOBALS['telegrarm_test_remote_requests'][] = array('url' => $url, 'args' => $args);
+
+    return isset($GLOBALS['telegrarm_test_remote_response']) ? $GLOBALS['telegrarm_test_remote_response'] : array();
 }
 
 /**
@@ -91,6 +127,10 @@ function admin_url(string $path = '', string $scheme = 'admin'): string {
     return $path;
 }
 
+function wp_parse_url(string $url, int $component = -1) {
+    return parse_url($url, $component);
+}
+
 function current_user_can(string $capability): bool {
     return true;
 }
@@ -99,14 +139,24 @@ function current_user_can(string $capability): bool {
  * @return mixed
  */
 function get_transient(string $transient) {
-    return false;
+    return isset($GLOBALS['telegrarm_test_transients'][$transient]) ? $GLOBALS['telegrarm_test_transients'][$transient] : false;
 }
 
 /**
  * @param mixed $value
  */
 function set_transient(string $transient, $value, int $expiration): bool {
+    $GLOBALS['telegrarm_test_transients'][$transient] = $value;
     return true;
+}
+
+function wp_schedule_single_event(int $timestamp, string $hook, array $args = array(), bool $wp_error = false): bool|WP_Error {
+    $GLOBALS['telegrarm_test_scheduled_events'][] = array('timestamp' => $timestamp, 'hook' => $hook, 'args' => $args);
+    return true;
+}
+
+function wp_clear_scheduled_hook(string $hook, array $args = array(), bool $wp_error = false): int|false|WP_Error {
+    return 0;
 }
 
 function plugin_basename(string $file): string {
@@ -115,6 +165,14 @@ function plugin_basename(string $file): string {
 
 function plugins_url(string $path = '', string $plugin = ''): string {
     return $path;
+}
+
+function wp_enqueue_style(string $handle, string $src = '', array $deps = array(), $ver = false, string $media = 'all'): void {}
+
+function wp_enqueue_script(string $handle, string $src = '', array $deps = array(), $ver = false, bool $in_footer = false): void {}
+
+function wp_localize_script(string $handle, string $object_name, array $l10n): bool {
+    return true;
 }
 
 function load_plugin_textdomain(string $domain, bool $deprecated = false, string $plugin_rel_path = ''): bool {
@@ -153,21 +211,21 @@ function esc_textarea(string $text): string {
  * @param mixed $value
  */
 function wp_json_encode($value, int $flags = 0, int $depth = 512): string|false {
-    return '';
+    return json_encode($value, $flags, $depth);
 }
 
 /**
  * @param array<string, mixed>|WP_Error $response
  */
 function wp_remote_retrieve_response_code($response): int|string {
-    return 200;
+    return is_array($response) && isset($response['response']['code']) ? (int) $response['response']['code'] : 0;
 }
 
 /**
  * @param array<string, mixed>|WP_Error $response
  */
 function wp_remote_retrieve_body($response): string {
-    return '';
+    return is_array($response) && isset($response['body']) && is_string($response['body']) ? $response['body'] : '';
 }
 
 function wp_http_validate_url(string $url): string|false {
@@ -208,7 +266,7 @@ function maybe_unserialize($data) {
  * @return array<string, mixed>
  */
 function get_user_meta(int $user_id, string $key = '', bool $single = false): array {
-    return array();
+    return isset($GLOBALS['telegrarm_test_user_meta'][$user_id]) ? $GLOBALS['telegrarm_test_user_meta'][$user_id] : array();
 }
 
 /**

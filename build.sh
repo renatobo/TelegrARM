@@ -25,6 +25,8 @@ STAGING_DIR="$(mktemp -d)"
 PACKAGE_DIR="$STAGING_DIR/$PLUGIN_SLUG"
 PACKAGE_PATHS=(
   "README.md"
+  "SECURITY.md"
+  "UPGRADE.md"
   "readme.txt"
   "LICENSE"
   "telegrarm.php"
@@ -32,7 +34,16 @@ PACKAGE_PATHS=(
   "telegrarm_after_new_user_notification.php"
   "telegrarm_update_profile_external.php"
   "uninstall.php"
+  "admin/telegrarm-field-discovery.php"
+  "includes/class-telegrarm-config.php"
+  "includes/class-telegrarm-debug-logger.php"
+  "includes/class-telegrarm-delivery-queue.php"
+  "includes/class-telegrarm-message-formatter.php"
+  "includes/class-telegrarm-telegram-client.php"
+  "includes/class-telegrarm-upgrader.php"
   "assets/icon.svg"
+  "assets/admin.css"
+  "assets/admin.js"
   "assets/telegrarm-settings-banner.svg"
 )
 
@@ -41,6 +52,10 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+if [[ -f "$OUTPUT_PATH" ]]; then
+  rm -f "$OUTPUT_PATH"
+fi
 
 mkdir -p "$PACKAGE_DIR"
 

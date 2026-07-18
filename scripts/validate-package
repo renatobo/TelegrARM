@@ -1,0 +1,33 @@
+#!/bin/bash
+
+set -euo pipefail
+
+ZIP_PATH="${1:-}"
+
+if [[ -z "$ZIP_PATH" || ! -f "$ZIP_PATH" ]]; then
+  echo "Usage: scripts/validate-package /path/to/plugin.zip"
+  exit 1
+fi
+
+LISTING="$(unzip -Z1 "$ZIP_PATH")"
+
+for required in \
+  "TelegrARM/telegrarm.php" \
+  "TelegrARM/readme.txt" \
+  "TelegrARM/SECURITY.md" \
+  "TelegrARM/admin/telegrarm-field-discovery.php" \
+  "TelegrARM/assets/admin.js" \
+  "TelegrARM/includes/class-telegrarm-telegram-client.php" \
+  "TelegrARM/UPGRADE.md"; do
+  if ! grep -Fxq "$required" <<< "$LISTING"; then
+    echo "Package is missing $required"
+    exit 1
+  fi
+done
+
+if grep -Eq '(^|/)(tests|\.github|\.git|scripts|stubs)/|\.sh$|phpunit|psalm|phpcs' <<< "$LISTING"; then
+  echo "Package contains development-only files."
+  exit 1
+fi
+
+echo "Validated $ZIP_PATH"

@@ -1,14 +1,17 @@
 # WordPress.org Submission Checklist
 
-Release prepared in this repository: `0.5.4`
+Release prepared in this repository: `1.0.0`
 
 Submission ZIP:
-- `/Users/renatobo/development/TelegrARM/TelegrARM-v0.5.4.zip`
+- `TelegrARM-v1.0.0.zip`
 
 What is already prepared:
-- Plugin version bumped to `0.5.4` in `telegrarm.php` and `readme.txt`.
-- `readme.txt` updated with a `0.5.4` changelog and upgrade notice.
-- Expanded Telegram test-message feedback to show the target type, chat ID, HTTP status, Telegram response details, and raw API body in the settings UI.
+- Plugin version bumped to `1.0.0` in `telegrarm.php` and `readme.txt`.
+- `readme.txt` updated with a `1.0.0` changelog and upgrade notice.
+- `UPGRADE.md` documents compatibility, deployment, verification, and rollback.
+- Limited Telegram test-message feedback to allowlisted status, error code, and description fields without exposing the raw API body.
+- Added bounded WP-Cron delivery, retry handling, rate pacing, server-side token resolution, and non-autoloaded credential migration.
+- Added PHPUnit, Psalm, WordPress Coding Standards, ShellCheck, and release-package validation gates.
 - Updated Telegram test-message wording so each test call names the New user or Profile updates configuration it is validating.
 - Added inline Telegram test-message actions in the New user and Profile updates settings tabs.
 - Added Telegram setup guidance for using the test-message action to confirm the bot can post in the target channel.
@@ -21,6 +24,7 @@ What is already prepared:
 - Telegram external-service disclosure added for plugin review.
 - Direct-access guards added to included PHP handler files.
 - Package build updated to include the plugin icon asset.
+- Package build updated to include runtime modules, external admin assets, and the upgrade guide while excluding development tooling.
 
 Manual steps still required on WordPress.org:
 1. Submit the ZIP through the plugin submission form: `https://wordpress.org/plugins/developers/add/`
@@ -38,3 +42,4 @@ Recommended reviewer notes:
 - ARMember must be installed and active.
 - TelegrARM does not send data unless the relevant event toggle is enabled and a Telegram bot token/chat ID is configured.
 - Uninstall removes the plugin options it stores.
+- WP-Cron must run for background event delivery.

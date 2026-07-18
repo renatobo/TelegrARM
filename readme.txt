@@ -4,8 +4,8 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 6.7
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.5.4
-Version: 0.5.4
+Stable tag: 1.0.0
+Version: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,7 @@ Key capabilities:
 External services:
 - This plugin connects to the Telegram Bot API to send notifications when enabled ARMember events fire.
 - Data sent to Telegram includes the configured destination chat ID, the notification text built from mapped ARMember profile fields, and optional contact data when contact sending is enabled.
+- Event payloads are stored temporarily in WordPress scheduled events while bounded background delivery is pending. Bot tokens are not stored in queued payloads.
 - Telegram terms of service: https://telegram.org/tos
 - Telegram privacy policy: https://telegram.org/privacy
 
@@ -67,6 +68,16 @@ Yes. Enable **Send contact on new user registration?**, then configure the phone
 Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 1.0.0 =
+- Moved event delivery to a bounded WP-Cron queue with short HTTP timeouts, capped retries, Telegram 429 handling, and per-chat pacing.
+- Enforced field mapping as a true allowlist, including Instagram and avatar fields.
+- Centralized configuration, formatting, transport, logging, queueing, and upgrade behavior into focused runtime modules.
+- Split cached ARMember database discovery and admin CSS/JavaScript out of the settings renderer.
+- Kept bot tokens server-side, added constant/filter overrides, migrated saved tokens to non-autoloaded storage, and removed raw response bodies from admin diagnostics.
+- Added strict identifier validation, sensitive-field discovery filtering, message-length limits, ARMember dependency notices, and more aggressive log redaction.
+- Added PHPUnit coverage, PHP 8.0/8.2/8.5 CI, WordPress Coding Standards, ShellCheck, and release-package validation.
+- Added a documented 1.0.0 upgrade and rollback procedure.
 
 = 0.5.4 =
 - Expanded Telegram test-message feedback in the settings UI to include the target type, chat ID, HTTP status, Telegram ok flag, error code or description, and raw API response body.
@@ -127,6 +138,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 1.0.0 =
+Major reliability and privacy hardening release. Existing options are retained, but WP-Cron must be operational for background delivery. Review UPGRADE.md before deployment.
 
 = 0.5.4 =
 Improves Telegram test-message feedback with explicit delivery details and the raw Telegram API response.

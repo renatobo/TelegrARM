@@ -54,3 +54,4 @@ wp-config.php
 # Local tool cache
 .tools/
 temp/
+.phpunit.result.cache

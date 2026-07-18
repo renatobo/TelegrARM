@@ -20,6 +20,8 @@ WordPress plugin for ARMember that sends Telegram notifications for selected use
 - Opt-in debug logging for sanitized failure traces during live troubleshooting
 - ARMember field discovery UI that builds mapping JSON from ARMember registry data first, then form fields, then usermeta fallback
 - Conditional hook loading (only enabled handlers are attached)
+- Background delivery with bounded retries, Telegram rate-limit handling, and short HTTP timeouts
+- Server-side token resolution through `TELEGRARM_BOT_TOKEN` or the `telegrarm_bot_token` filter
 - Git Updater-compatible release assets for dashboard updates
 - Versioned release ZIPs built automatically by GitHub Actions
 
@@ -66,6 +68,7 @@ Reference: [Telegram Bot documentation](https://core.telegram.org/bots/tutorial#
 TelegrARM connects to the Telegram Bot API when enabled ARMember events fire.
 
 - Data sent to Telegram includes the configured destination chat ID, notification text built from mapped ARMember profile fields, and optional contact data when contact sending is enabled.
+- Event payloads are stored temporarily in the WordPress scheduled-event queue until delivery succeeds or bounded retries are exhausted; bot tokens are resolved only when a queued event is processed and are never stored in queue payloads.
 - Telegram terms of service: [telegram.org/tos](https://telegram.org/tos)
 - Telegram privacy policy: [telegram.org/privacy](https://telegram.org/privacy)
 
@@ -100,6 +103,10 @@ TelegrARM includes the metadata Git Updater expects, including `Primary Branch` 
 
 Repository: [renatobo/TelegrARM](https://github.com/renatobo/TelegrARM)
 
+## Upgrading to 1.0.0
+
+Version 1.0.0 preserves existing options and public event callbacks, but changes event delivery to a WP-Cron-backed queue and stops redisplaying saved bot tokens. Follow [UPGRADE.md](./UPGRADE.md) for preparation, deployment, verification, compatibility notes, and rollback.
+
 ## Packaging
 
 Build an installable plugin ZIP from the repo root:
@@ -109,7 +116,7 @@ Build an installable plugin ZIP from the repo root:
 ```
 
 That creates a file like `TelegrARM-vx.y.z.zip` in the project root, ready to upload in **Plugins > Add New > Upload Plugin**.
-The archive includes only the plugin files needed on a WordPress site, excludes shell scripts, and keeps only `README.md` from markdown documentation files.
+The archive includes only runtime plugin files plus `README.md`, `SECURITY.md`, and `UPGRADE.md`; it excludes tests, CI configuration, analysis stubs, and shell tooling.
 
 ## Releases
 
@@ -163,6 +170,13 @@ Please review [SECURITY.md](./SECURITY.md) for vulnerability reporting and harde
 - `telegrarm_after_new_user_notification.php`: new-user Telegram handler
 - `telegrarm_update_profile_external.php`: profile-update Telegram handler
 - `uninstall.php`: cleanup logic
+- `includes/class-telegrarm-config.php`: credential and channel configuration
+- `includes/class-telegrarm-message-formatter.php`: allowlisted Telegram HTML formatting and length limits
+- `includes/class-telegrarm-telegram-client.php`: bounded WordPress HTTP transport and response parsing
+- `includes/class-telegrarm-delivery-queue.php`: WP-Cron queue, retries, deduplication, and rate pacing
+- `includes/class-telegrarm-debug-logger.php`: bounded, redacted diagnostics
+- `includes/class-telegrarm-upgrader.php`: idempotent version migrations
+- `admin/telegrarm-field-discovery.php`: cached ARMember registry, form-field, and usermeta discovery
 
 ### CI
 
@@ -170,6 +184,8 @@ Please review [SECURITY.md](./SECURITY.md) for vulnerability reporting and harde
 - Repo-managed CodeQL workflow on push/PR to `main` plus a weekly schedule
 - Manual release workflow for explicit GitHub Actions-driven releases
 - Release ZIP workflow for `v*` tags
+- PHPUnit matrix on PHP 8.0, 8.2, and 8.5
+- WordPress Coding Standards, ShellCheck, and release-package validation
 
 ## License
 
