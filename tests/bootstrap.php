@@ -5,6 +5,7 @@
 
 define('ABSPATH', __DIR__ . '/wordpress/');
 define('MINUTE_IN_SECONDS', 60);
+define('HOUR_IN_SECONDS', 3600);
 define('BONO_TELEGRARM_VERSION', '1.0.0');
 
 require_once dirname(__DIR__) . '/stubs/wordpress-stubs.php';

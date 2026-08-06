@@ -92,10 +92,11 @@ The plugin communicates with Telegram's Bot API to send formatted notifications.
 ## Common Tasks
 
 ### Updating Version Number
-Update in three places:
-1. Plugin header in [telegrarm.php](telegrarm.php#L7)
-2. `BONO_TELEGRARM_VERSION` constant in [telegrarm.php](telegrarm.php#L24)
+Prefer `./release.sh x.y.z`, which rewrites all four references and verifies they match. When editing by hand:
+1. Plugin header `Version:` in [telegrarm.php](telegrarm.php)
+2. `BONO_TELEGRARM_VERSION` constant in [telegrarm.php](telegrarm.php)
 3. `Stable tag` in [readme.txt](readme.txt)
+4. `Version` in [readme.txt](readme.txt)
 
 ### Adding Settings
 1. Register option in `telegrarm_settings.php`
@@ -112,9 +113,10 @@ Update in three places:
 ## Release Process
 
 The plugin uses GitHub Actions for automated releases:
-- `./build.sh` creates a versioned WordPress plugin ZIP
-- `./release.sh x.y.z` syncs version metadata, commits the bump, and pushes the version tag
-- pushing `v*` tags builds the ZIP and attaches it to the GitHub Release
+- write `release-notes/x.y.z.md` first, with the `## New Features`, `## Improvements`, and `## Bug Fixes` headings. `release.sh` and the release workflow both refuse to run without it
+- `./build.sh` creates a versioned WordPress plugin ZIP from an explicit file allowlist
+- `./release.sh x.y.z` verifies the notes file, refuses to run when non-release paths are dirty, syncs version metadata, commits the bump, and pushes the version tag
+- pushing `v*` tags builds the ZIP, validates it, attaches it to the GitHub Release with its SHA-256 checksum and build provenance attestation, and uses the notes file as the release body
 - the plugin header advertises `Primary Branch` and `Release Asset` for Git Updater compatibility
 - See [.github/workflows/](.github/workflows/) for automation details
 

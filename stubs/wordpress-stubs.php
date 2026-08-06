@@ -150,6 +150,23 @@ function set_transient(string $transient, $value, int $expiration): bool {
     return true;
 }
 
+function delete_transient(string $transient): bool {
+    unset($GLOBALS['telegrarm_test_transients'][$transient]);
+    return true;
+}
+
+function wp_generate_password(int $length = 12, bool $special_chars = true, bool $extra_special_chars = false): string {
+    $GLOBALS['telegrarm_test_password_counter'] = isset($GLOBALS['telegrarm_test_password_counter'])
+        ? $GLOBALS['telegrarm_test_password_counter'] + 1
+        : 1;
+
+    return substr(
+        str_pad((string) $GLOBALS['telegrarm_test_password_counter'], $length, 'abcdefghijklmnopqrstuvwxyz0123456789'),
+        0,
+        $length
+    );
+}
+
 function wp_schedule_single_event(int $timestamp, string $hook, array $args = array(), bool $wp_error = false): bool|WP_Error {
     $GLOBALS['telegrarm_test_scheduled_events'][] = array('timestamp' => $timestamp, 'hook' => $hook, 'args' => $args);
     return true;
@@ -242,6 +259,13 @@ function wp_create_nonce(string|int $action = -1): string {
  */
 function check_ajax_referer(string|int $action = -1, string|false $query_arg = false, bool $stop = true) {
     return 1;
+}
+
+/**
+ * @return int|false
+ */
+function wp_verify_nonce(string $nonce, string|int $action = -1) {
+    return isset($GLOBALS['telegrarm_test_valid_nonces'][$nonce]) ? 1 : false;
 }
 
 /**

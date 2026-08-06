@@ -48,8 +48,9 @@ wp-config.php
 # uncomment the next line
 #/wp-content/themes
 
-# Claude Code directory
+# Claude Code directories
 .claude/
+.agents/
 
 # Local tool cache
 .tools/

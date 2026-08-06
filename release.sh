@@ -3,9 +3,23 @@
 set -euo pipefail
 
 VERSION="${1:-}"
+PLUGIN_FILE="telegrarm.php"
+README_FILE="readme.txt"
+NOTES_DIR="release-notes"
+NOTES_FILE=""
+RELEASE_SUPPORT_FILES=(
+  "$README_FILE"
+  "$PLUGIN_FILE"
+  "README.md"
+  "build.sh"
+  "release.sh"
+  ".gitignore"
+  ".github/workflows/package-plugin.yml"
+  "$NOTES_DIR/README.md"
+)
 
 if [[ -z "$VERSION" ]]; then
-  read -r -p "Enter new version (e.g. 0.4.4): " VERSION
+  read -r -p "Enter new version (e.g. 1.0.1): " VERSION
 fi
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -14,16 +28,100 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 TAG="v$VERSION"
-
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Working tree is not clean. Commit or stash changes before running a release."
-  exit 1
-fi
+NOTES_FILE="$NOTES_DIR/$VERSION.md"
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
   echo "Tag $TAG already exists."
   exit 1
 fi
+
+is_allowed_release_path() {
+  local path="$1"
+  local allowed
+
+  if [[ "$path" == *.zip && "$path" != */* ]]; then
+    return 0
+  fi
+
+  for allowed in "${RELEASE_SUPPORT_FILES[@]}"; do
+    if [[ "$path" == "$allowed" ]]; then
+      return 0
+    fi
+  done
+
+  if [[ "$path" == "$NOTES_DIR/"* ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+assert_releasable_worktree() {
+  local changed_paths=()
+  local unexpected_paths=()
+  local path
+
+  while IFS= read -r path; do
+    if [[ -n "$path" ]]; then
+      changed_paths+=("$path")
+    fi
+  done < <(
+    {
+      git diff --name-only
+      git diff --cached --name-only
+      git ls-files --others --exclude-standard
+    } | sort -u
+  )
+
+  if [[ ${#changed_paths[@]} -eq 0 ]]; then
+    return
+  fi
+
+  for path in "${changed_paths[@]}"; do
+    if ! is_allowed_release_path "$path"; then
+      unexpected_paths+=("$path")
+    fi
+  done
+
+  if [[ ${#unexpected_paths[@]} -eq 0 ]]; then
+    return
+  fi
+
+  echo "Working tree contains non-release changes:"
+  printf '  %s\n' "${unexpected_paths[@]}"
+  echo "Commit or stash those paths before running a release."
+  exit 1
+}
+
+assert_release_notes_file() {
+  local heading
+
+  if [[ ! -f "$NOTES_FILE" ]]; then
+    echo "Missing release notes file: $NOTES_FILE"
+    echo "Create it with these sections before releasing:"
+    echo "  ## New Features"
+    echo "  ## Improvements"
+    echo "  ## Bug Fixes"
+    exit 1
+  fi
+
+  for heading in "## New Features" "## Improvements" "## Bug Fixes"; do
+    if ! grep -Fq "$heading" "$NOTES_FILE"; then
+      echo "Release notes file $NOTES_FILE is missing required heading: $heading"
+      exit 1
+    fi
+  done
+}
+
+stage_release_support_files() {
+  local file
+
+  for file in "${RELEASE_SUPPORT_FILES[@]}"; do
+    if [[ -e "$file" ]]; then
+      git add -- "$file"
+    fi
+  done
+}
 
 update_file() {
   local file_path="$1"
@@ -37,19 +135,19 @@ update_file() {
 }
 
 extract_plugin_header_version() {
-  sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' "telegrarm.php" | head -n 1
+  sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' "$PLUGIN_FILE" | head -n 1
 }
 
 extract_plugin_constant_version() {
-  sed -n "s/^define( 'BONO_TELEGRARM_VERSION', '\\(.*\\)' );$/\\1/p" "telegrarm.php" | head -n 1
+  sed -n "s/^define( 'BONO_TELEGRARM_VERSION', '\\(.*\\)' );$/\\1/p" "$PLUGIN_FILE" | head -n 1
 }
 
 extract_stable_tag_version() {
-  sed -n 's/^Stable tag: //p' "readme.txt" | head -n 1
+  sed -n 's/^Stable tag: //p' "$README_FILE" | head -n 1
 }
 
 extract_readme_version() {
-  sed -n 's/^Version: //p' "readme.txt" | head -n 1
+  sed -n 's/^Version: //p' "$README_FILE" | head -n 1
 }
 
 assert_versions_match() {
@@ -74,24 +172,35 @@ assert_versions_match() {
   fi
 }
 
-update_file "readme.txt" "^Stable tag: .*" "Stable tag: $VERSION"
-update_file "readme.txt" "^Version: .*" "Version: $VERSION"
-update_file "telegrarm.php" "^[[:space:]]*\\*[[:space:]]*Version:[[:space:]]*.*" " * Version:           $VERSION"
-update_file "telegrarm.php" "^define( 'BONO_TELEGRARM_VERSION', '.*' );$" "define( 'BONO_TELEGRARM_VERSION', '$VERSION' );"
+assert_releasable_worktree
+assert_release_notes_file
+
+update_file "$README_FILE" "^Stable tag: .*" "Stable tag: $VERSION"
+update_file "$README_FILE" "^Version: .*" "Version: $VERSION"
+update_file "$PLUGIN_FILE" "^[[:space:]]*\\*[[:space:]]*Version:[[:space:]]*.*" " * Version:           $VERSION"
+update_file "$PLUGIN_FILE" "^define( 'BONO_TELEGRARM_VERSION', '.*' );$" "define( 'BONO_TELEGRARM_VERSION', '$VERSION' );"
 
 assert_versions_match
 
-git add readme.txt telegrarm.php
-git commit -m "Bump version to $VERSION"
+stage_release_support_files
+git add -- "$NOTES_FILE"
+
+if git diff --cached --quiet; then
+  echo "Version $VERSION metadata is already committed; creating the release tag from HEAD."
+else
+  git commit -m "Bump version to $VERSION"
+fi
+
 git tag -a "$TAG" -m "Release $VERSION"
 git push origin main
 git push origin "$TAG"
 
-cat <<EOF
+cat <<MSG
 Release prepared for $TAG.
 
 GitHub Actions will now:
 - build the WordPress plugin zip with ./build.sh
-- create or update the GitHub Release for $TAG
+- create or update the GitHub Release for $TAG using $NOTES_FILE
 - attach the generated versioned zip asset
-EOF
+- attach its SHA-256 checksum and GitHub provenance attestation
+MSG

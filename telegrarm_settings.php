@@ -387,7 +387,7 @@ function telegrarm_build_test_message_feedback( $target, $channel_id, $response,
  * @return array<string, mixed>|WP_Error
  */
 function telegrarm_send_telegram_text_message( $bot_api_token, $channel_id, $message ) {
-	$bot_api_token = telegrarm_sanitize_bot_token( $bot_api_token );
+	$bot_api_token = telegrarm_validate_bot_token( $bot_api_token );
 	$channel_id    = telegrarm_sanitize_channel_id( $channel_id );
 	$message       = is_scalar( $message ) ? trim( sanitize_textarea_field( (string) $message ) ) : '';
 
@@ -440,11 +440,21 @@ function telegrarm_ajax_send_test_message() {
 
 	check_ajax_referer( 'telegrarm_send_test_message' );
 
-	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The plugin-specific callback validates the Telegram token format.
-	$bot_api_token = isset( $_POST['bot_token'] ) ? telegrarm_sanitize_bot_token( wp_unslash( $_POST['bot_token'] ) ) : '';
+	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The plugin-specific callback sanitizes the submitted value immediately.
+	$submitted_token = isset( $_POST['bot_token'] ) ? telegrarm_sanitize_setting_text( wp_unslash( $_POST['bot_token'] ) ) : '';
 
-	if ( '' === $bot_api_token ) {
-		$bot_api_token = TelegrARM_Config::get_bot_token();
+	// A blank field means "test the saved credential"; anything else must be valid on its own.
+	$bot_api_token = '' === $submitted_token
+		? TelegrARM_Config::get_bot_token()
+		: telegrarm_validate_bot_token( $submitted_token );
+
+	if ( '' !== $submitted_token && '' === $bot_api_token ) {
+		wp_send_json_error(
+			array(
+				'message' => __( 'The Telegram bot token format is invalid, so no test message was sent. Clear the field to test the saved token instead.', 'telegrarm' ),
+			),
+			400
+		);
 	}
 	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The plugin-specific callback validates Telegram destinations.
 	$channel_id = isset( $_POST['channel_id'] ) ? telegrarm_sanitize_channel_id( wp_unslash( $_POST['channel_id'] ) ) : '';
@@ -525,36 +535,88 @@ function telegrarm_sanitize_setting_text( $value ) {
 }
 
 /**
- * Sanitize the Telegram bot token.
+ * Normalize and validate a Telegram bot token.
+ *
+ * This validator is strict: it never falls back to the stored credential and
+ * never records a settings error, so it is safe to call outside the Settings
+ * API request.
+ *
+ * @param mixed $value Candidate token.
+ * @return string Valid token, or an empty string when the value is empty or malformed.
+ */
+function telegrarm_validate_bot_token( $value ) {
+	$token = telegrarm_sanitize_setting_text( $value );
+	$token = preg_replace( '/\s+/', '', $token );
+
+	if ( ! is_string( $token ) || '' === $token ) {
+		return '';
+	}
+
+	return preg_match( '/^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$/', $token ) ? $token : '';
+}
+
+/**
+ * Determine whether the current request is the nonce-verified settings save.
+ *
+ * @return bool
+ */
+function telegrarm_is_settings_save_request() {
+	if ( ! isset( $_POST['option_page'], $_POST['_wpnonce'] ) ) {
+		return false;
+	}
+
+	if ( 'telegrarm_settings_group' !== sanitize_text_field( wp_unslash( $_POST['option_page'] ) ) ) {
+		return false;
+	}
+
+	return false !== wp_verify_nonce(
+		sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ),
+		'telegrarm_settings_group-options'
+	);
+}
+
+/**
+ * Sanitize the Telegram bot token submitted through the Settings API.
+ *
+ * Registered as the `telegram_bot_api_token` sanitize callback. A blank or
+ * malformed submission retains the stored credential so the token is never
+ * lost by accident.
  *
  * @param mixed $value Submitted option value.
  * @return string
  */
 function telegrarm_sanitize_bot_token( $value ) {
-	$token = telegrarm_sanitize_setting_text( $value );
-	$token = preg_replace( '/\s+/', '', $token );
+	$existing = get_option( 'telegram_bot_api_token', '' );
+	$existing = is_scalar( $existing ) ? (string) $existing : '';
 
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- This sanitizer runs only inside the nonce-protected Settings API request.
-	if ( isset( $_POST['telegrarm_clear_bot_token'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['telegrarm_clear_bot_token'] ) ) ) {
-		return '';
+	if ( telegrarm_is_settings_save_request() ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- telegrarm_is_settings_save_request() verified the settings nonce before this branch runs.
+		$clear_requested = isset( $_POST['telegrarm_clear_bot_token'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['telegrarm_clear_bot_token'] ) );
+
+		if ( $clear_requested ) {
+			return '';
+		}
 	}
+
+	$submitted = telegrarm_sanitize_setting_text( $value );
+
+	if ( '' === $submitted ) {
+		return $existing;
+	}
+
+	$token = telegrarm_validate_bot_token( $submitted );
 
 	if ( '' === $token ) {
-		$existing = get_option( 'telegram_bot_api_token', '' );
-		return is_scalar( $existing ) ? (string) $existing : '';
-	}
-
-	if ( ! preg_match( '/^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$/', $token ) ) {
 		add_settings_error(
 			'telegrarm_settings_group',
 			'telegrarm_invalid_bot_token',
 			__( 'The Telegram bot token format is invalid; the previous token was retained.', 'telegrarm' )
 		);
-		$existing = get_option( 'telegram_bot_api_token', '' );
-		return is_scalar( $existing ) ? (string) $existing : '';
+
+		return $existing;
 	}
 
-	return is_string( $token ) ? $token : '';
+	return $token;
 }
 
 /**

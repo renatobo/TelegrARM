@@ -21,10 +21,45 @@ final class DeliveryTest extends TestCase {
         $this->assertSame(TelegrARM_Delivery_Queue::HOOK, $GLOBALS['telegrarm_test_scheduled_events'][0]['hook']);
         $this->assertCount(0, $GLOBALS['telegrarm_test_remote_requests']);
 
-        $payload = $GLOBALS['telegrarm_test_scheduled_events'][0]['args'][0];
+        $ticket = $GLOBALS['telegrarm_test_scheduled_events'][0]['args'][0];
+        $this->assertIsString($ticket);
+        $this->assertStringStartsWith(TelegrARM_Delivery_Queue::TICKET_PREFIX, $ticket);
+
+        $payload = $GLOBALS['telegrarm_test_transients'][$ticket];
         $this->assertStringContainsString('First Name: Renato', $payload['body']['text']);
         $this->assertStringNotContainsString('not sent', $payload['body']['text']);
         $this->assertArrayNotHasKey('chat_id', $payload['body']);
+    }
+
+    public function test_cron_arguments_never_carry_member_data(): void {
+        telegrarm_profile_update(42, array('first_name' => 'Renato'));
+
+        $args = $GLOBALS['telegrarm_test_scheduled_events'][0]['args'];
+
+        $this->assertStringNotContainsString('Renato', wp_json_encode($args));
+    }
+
+    public function test_pacing_defers_a_second_delivery_to_the_next_slot(): void {
+        $channel_id = '-1001234567890';
+        $last_send  = time();
+
+        $GLOBALS['telegrarm_test_transients']['telegrarm_rate_' . md5($channel_id)] = $last_send;
+
+        TelegrARM_Delivery_Queue::process(
+            array(
+                'method'  => 'sendMessage',
+                'target'  => 'profile',
+                'body'    => array('text' => 'paced', 'parse_mode' => 'HTML'),
+                'attempt' => 0,
+            )
+        );
+
+        $this->assertCount(0, $GLOBALS['telegrarm_test_remote_requests']);
+        $this->assertCount(1, $GLOBALS['telegrarm_test_scheduled_events']);
+        $this->assertSame(
+            $last_send + TelegrARM_Delivery_Queue::MIN_SEND_INTERVAL,
+            $GLOBALS['telegrarm_test_scheduled_events'][0]['timestamp']
+        );
     }
 
     public function test_telegram_429_response_exposes_bounded_retry_delay(): void {
