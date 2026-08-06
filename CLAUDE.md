@@ -10,6 +10,8 @@ TelegrARM is a WordPress plugin that bridges ARMember membership plugin with Tel
 
 - **[telegrarm.php](telegrarm.php)** - Main plugin file with conditional hook initialization
 - **[telegrarm_settings.php](telegrarm_settings.php)** - WordPress admin settings interface
+- **[includes/](includes/)** - Config, debug logger, message formatter, Telegram client, delivery queue, upgrader
+- **[admin/telegrarm-field-discovery.php](admin/telegrarm-field-discovery.php)** - Cached ARMember field discovery for the mapping builder
 - **[telegrarm_update_profile_external.php](telegrarm_update_profile_external.php)** - Profile update notification handler
 - **[telegrarm_after_new_user_notification.php](telegrarm_after_new_user_notification.php)** - New user registration notification handler
 - **[uninstall.php](uninstall.php)** - Plugin cleanup on uninstall
@@ -20,6 +22,12 @@ TelegrARM is a WordPress plugin that bridges ARMember membership plugin with Tel
 TelegrARM/
 ├── telegrarm.php                               # Main plugin file
 ├── telegrarm_settings.php                      # Admin settings page
+├── includes/class-telegrarm-*.php              # Config, logger, formatter, client, queue, upgrader
+├── admin/telegrarm-field-discovery.php         # ARMember field discovery (cached, admin-only)
+├── assets/                                     # admin.css, admin.js, SVGs
+├── tests/ + stubs/                              # Pure unit tests, no WordPress
+├── scripts/                                    # phpunit, psalm, validate-package wrappers
+├── release-notes/<version>.md                  # Required per release
 ├── telegrarm_update_profile_external.php       # Profile update hook
 ├── telegrarm_after_new_user_notification.php   # New user hook
 └── uninstall.php                               # Cleanup script
@@ -32,6 +40,18 @@ TelegrARM/
 - **Dependencies:** ARMember plugin
 - **External Services:** Telegram Bot API
 
+## Local Development
+
+No `composer.json` or `vendor/`. Tooling is phars in gitignored `.tools/`, run via wrappers that need `chmod +x` on first use:
+
+- `./scripts/phpunit` - unit tests
+- `./scripts/psalm` - static analysis (must report "No errors found")
+- `phpcs --standard=phpcs.xml.dist` - not vendored; `composer global require wp-coding-standards/wpcs dealerdirect/phpcodesniffer-composer-installer` first
+- `shellcheck build.sh release.sh scripts/*` - matches the shellcheck CI job
+- `./build.sh && ./scripts/validate-package <zip>` - matches the package CI job
+
+All five must pass before a release; CI runs exactly these.
+
 ## Key Design Patterns
 
 ### Conditional Hook Loading
@@ -39,6 +59,9 @@ The plugin uses `telegrarm_init_hooks_conditionally()` to dynamically load notif
 
 ### Modular Notification System
 Each notification type is implemented in a separate file and loaded only when enabled, making the codebase extensible for new notification types.
+
+### Queue Payload Indirection
+`TelegrARM_Delivery_Queue` stores each payload in a randomized transient and passes only an opaque ticket as the cron argument. Never pass the payload itself: WP-Cron args live in the autoloaded `cron` option, and payloads carry member PII (phone, names, message body). `process()` also accepts a legacy inline array for events queued before 1.0.1.
 
 ## WordPress Integration Points
 
@@ -89,6 +112,9 @@ The plugin communicates with Telegram's Bot API to send formatted notifications.
 - Check error handling for failed API calls
 - Test uninstall cleanup
 
+### Test Harness
+Tests are pure unit tests with no WordPress loaded. `tests/bootstrap.php` defines WP constants and loads `stubs/wordpress-stubs.php`. Any WordPress function newly used in runtime code needs a stub there, and any new WP constant (e.g. `HOUR_IN_SECONDS`) needs defining in the bootstrap. Stubs hold state in `$GLOBALS['telegrarm_test_*']`.
+
 ## Common Tasks
 
 ### Updating Version Number
@@ -110,6 +136,10 @@ Prefer `./release.sh x.y.z`, which rewrites all four references and verifies the
 - Verify bot permissions in Telegram channels
 - Test with different ARMember form configurations
 
+### Static Analysis Gotchas
+- Psalm rejects top-level `global $wpdb;` (`InvalidGlobal`); PHPCS rejects `$wpdb = $GLOBALS['wpdb'];` (`WordPress.WP.GlobalVariablesOverride`). Wrap DB access in a function and use `global $wpdb;` inside it, as [uninstall.php](uninstall.php) does.
+- `phpcs:ignore` justifications are read as claims. Verify the claim is true before writing it.
+
 ## Release Process
 
 The plugin uses GitHub Actions for automated releases:
@@ -118,6 +148,8 @@ The plugin uses GitHub Actions for automated releases:
 - `./release.sh x.y.z` verifies the notes file, refuses to run when non-release paths are dirty, syncs version metadata, commits the bump, and pushes the version tag
 - pushing `v*` tags builds the ZIP, validates it, attaches it to the GitHub Release with its SHA-256 checksum and build provenance attestation, and uses the notes file as the release body
 - the plugin header advertises `Primary Branch` and `Release Asset` for Git Updater compatibility
+- `release.sh` aborts when any path outside its allowlist is dirty or untracked. Gitignore local scratch files rather than leaving them at the repo root (this is why there is no `.claude.local.md`)
+- `release.sh` does **not** update the `readme.txt` changelog or Upgrade Notice. Add both by hand before releasing; only version numbers are automated
 - See [.github/workflows/](.github/workflows/) for automation details
 
 ## External Resources

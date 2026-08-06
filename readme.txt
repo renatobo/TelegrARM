@@ -69,6 +69,14 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 
 == Changelog ==
 
+= 1.0.1 =
+- Kept member data out of the autoloaded cron option by storing queued delivery payloads in randomized, non-autoloaded transients and passing only an opaque ticket to WP-Cron.
+- Fixed per-chat pacing, which previously only deferred deliveries queued within the same second, to space messages at one every four seconds per chat.
+- Limited the clear-token checkbox to nonce-verified settings saves so an unrelated option update can no longer blank the stored bot token.
+- Reported a format error when an admin test message uses a malformed bot token instead of silently testing the previously saved token.
+- Removed queued delivery payloads and transient markers on uninstall.
+- Published releases with explicit release notes, a SHA-256 checksum, and a build provenance attestation.
+
 = 1.0.0 =
 - Moved event delivery to a bounded WP-Cron queue with short HTTP timeouts, capped retries, Telegram 429 handling, and per-chat pacing.
 - Enforced field mapping as a true allowlist, including Instagram and avatar fields.
@@ -138,6 +146,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Privacy and reliability fix release. Queued notifications no longer keep member data in the autoloaded cron option, and per-chat pacing now works as documented. Deliveries queued by 1.0.0 are processed without migration.
 
 = 1.0.0 =
 Major reliability and privacy hardening release. Existing options are retained, but WP-Cron must be operational for background delivery. Review UPGRADE.md before deployment.
