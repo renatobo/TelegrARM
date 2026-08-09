@@ -5,8 +5,8 @@ Requires at least: 7.0
 Tested up to: 7.0.3
 Requires PHP: 8.0
 Requires Plugins: armember-membership
-Stable tag: 1.1.0
-Version: 1.1.0
+Stable tag: 1.1.1
+Version: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,9 @@ Yes. Enable **Send contact on new user registration?**, then configure the phone
 Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 1.1.1 =
+- Declared ARMember as a required plugin through the `Requires Plugins` header, so WordPress blocks TelegrARM activation until ARMember is installed and active.
 
 = 1.1.0 =
 - Raised the minimum WordPress version to 7.0 and tested the plugin against WordPress 7.0.3.
@@ -151,6 +154,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 1.1.1 =
+ARMember is now a hard requirement: TelegrARM cannot be activated unless a plugin folder named armember-membership is installed and active. Existing ARMember Lite sites are unaffected. Sites running ARMember Premium from CodeCanyon, or installing ARMember for the first time, cannot satisfy this dependency and should stay on 1.1.0.
 
 = 1.1.0 =
 Requires WordPress 7.0 or later. Sites on an older WordPress will not be offered this update and should stay on 1.0.1. No settings or data changes.
