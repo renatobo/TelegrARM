@@ -6,6 +6,7 @@
  * Version:           1.1.0
  * Requires at least: 7.0
  * Requires PHP:      8.0
+ * Requires Plugins:  armember-membership
  * Author:            Renato Bonomini
  * Author URI:        https://github.com/renatobo
  * License:           GPLv2 or later

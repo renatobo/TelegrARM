@@ -4,6 +4,7 @@ Tags: telegram, armember, notifications, integration
 Requires at least: 7.0
 Tested up to: 7.0.3
 Requires PHP: 8.0
+Requires Plugins: armember-membership
 Stable tag: 1.1.0
 Version: 1.1.0
 License: GPLv2 or later
