@@ -1,5 +1,5 @@
 # TelegrARM
-[![WordPress](https://img.shields.io/badge/WordPress-6.7%2B-21759b)](https://wordpress.org/)
+[![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-21759b)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4)](https://www.php.net/)
 [![Release](https://img.shields.io/github/v/release/renatobo/TelegrARM?label=release)](https://github.com/renatobo/TelegrARM/releases)
 [![Psalm](https://github.com/renatobo/TelegrARM/actions/workflows/psalm.yml/badge.svg?branch=main)](https://github.com/renatobo/TelegrARM/actions/workflows/psalm.yml)
@@ -31,7 +31,7 @@ If you already use ARMember and Telegram internally, TelegrARM provides a simple
 
 ## Requirements
 
-- WordPress `6.7+`
+- WordPress `7.0+`
 - PHP `8.0+`
 - ARMember installed and active
 - A Telegram bot token

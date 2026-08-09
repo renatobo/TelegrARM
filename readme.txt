@@ -1,8 +1,8 @@
 === TelegrARM ===
 Contributors: renatobo
 Tags: telegram, armember, notifications, integration
-Requires at least: 6.7
-Tested up to: 6.9
+Requires at least: 7.0
+Tested up to: 7.0.3
 Requires PHP: 8.0
 Stable tag: 1.0.1
 Version: 1.0.1
@@ -68,6 +68,10 @@ Yes. Enable **Send contact on new user registration?**, then configure the phone
 Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 1.1.0 =
+- Raised the minimum WordPress version to 7.0 and tested the plugin against WordPress 7.0.3.
+- Removed the runtime PHP version guard and its admin notice; the `Requires PHP: 8.0` header is enforced by WordPress core at install, update, and activation.
 
 = 1.0.1 =
 - Kept member data out of the autoloaded cron option by storing queued delivery payloads in randomized, non-autoloaded transients and passing only an opaque ticket to WP-Cron.
@@ -146,6 +150,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+Requires WordPress 7.0 or later. Sites on an older WordPress will not be offered this update and should stay on 1.0.1. No settings or data changes.
 
 = 1.0.1 =
 Privacy and reliability fix release. Queued notifications no longer keep member data in the autoloaded cron option, and per-chat pacing now works as documented. Deliveries queued by 1.0.0 are processed without migration.

@@ -32,7 +32,7 @@ Guidance for coding agents working in this repository.
 
 ## Environment and Compatibility
 
-- WordPress: `6.7+`
+- WordPress: `7.0+`
 - PHP: `8.0+`
 - Dependency: ARMember plugin must be installed/active.
 

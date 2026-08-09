@@ -35,7 +35,7 @@ TelegrARM/
 
 ## Technical Requirements
 
-- **WordPress:** 6.7+
+- **WordPress:** 7.0+
 - **PHP:** 8.0+ (tested up to PHP 8.5)
 - **Dependencies:** ARMember plugin
 - **External Services:** Telegram Bot API
@@ -105,7 +105,7 @@ The plugin communicates with Telegram's Bot API to send formatted notifications.
 5. Update documentation
 
 ### Testing Checklist
-- Test with WordPress 6.7+ and latest version
+- Test with WordPress 7.0+ and latest version
 - Verify ARMember compatibility
 - Test Telegram API connection
 - Validate all user inputs

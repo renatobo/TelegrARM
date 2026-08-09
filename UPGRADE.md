@@ -4,7 +4,7 @@ TelegrARM 1.0.0 preserves all existing WordPress option names and ARMember hook 
 
 ## Before upgrading
 
-1. Confirm the site runs WordPress 6.7 or later and PHP 8.0 or later.
+1. Confirm the site runs WordPress 7.0 or later and PHP 8.0 or later.
 2. Confirm ARMember is installed and active.
 3. Take a database backup and a copy of the current TelegrARM plugin directory.
 4. Record the enabled event toggles, destination chat IDs, contact settings, and field mapping JSON from **Settings > TelegrARM**.

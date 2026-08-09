@@ -4,7 +4,7 @@
  * Plugin URI:        https://github.com/renatobo/TelegrARM
  * Description:       Enable Telegram notifications for user profile updates and other ARMember events.
  * Version:           1.0.1
- * Requires at least: 6.7
+ * Requires at least: 7.0
  * Requires PHP:      8.0
  * Author:            Renato Bonomini
  * Author URI:        https://github.com/renatobo
@@ -31,12 +31,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'BONO_TELEGRARM_VERSION', '1.0.1' );
 
-// Check PHP version requirement.
-if ( version_compare( PHP_VERSION, '8.0.0', '<' ) ) {
-	add_action( 'admin_notices', 'telegrarm_php_version_notice' );
-	return;
-}
-
 require_once __DIR__ . '/includes/class-telegrarm-config.php';
 require_once __DIR__ . '/includes/class-telegrarm-debug-logger.php';
 require_once __DIR__ . '/includes/class-telegrarm-message-formatter.php';
@@ -56,23 +50,6 @@ if ( is_admin() ) {
 add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'telegrarm_add_plugin_action_links' );
 add_action( 'plugins_loaded', 'telegrarm_load_textdomain', 5 );
 add_action( 'admin_notices', 'telegrarm_armember_dependency_notice' );
-
-/**
- * Show an admin notice when PHP is too old for this plugin.
- */
-function telegrarm_php_version_notice() {
-	echo '<div class="notice notice-error"><p>';
-	echo '<strong>' . esc_html__( 'TelegrARM:', 'telegrarm' ) . '</strong> ';
-	/* translators: %s: current PHP version */
-	echo esc_html(
-		sprintf(
-			/* translators: %s: Current PHP version. */
-			__( 'This plugin requires PHP 8.0 or higher. You are running PHP %s. Please upgrade your PHP version.', 'telegrarm' ),
-			PHP_VERSION
-		)
-	);
-	echo '</p></div>';
-}
 
 /**
  * Add a Settings link on the Plugins screen.
