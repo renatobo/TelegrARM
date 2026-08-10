@@ -19,7 +19,7 @@ final class TelegrARM_Delivery_Queue {
 	// Generous, because WP-Cron only fires on visitor requests: a quiet site can
 	// leave a scheduled delivery waiting for a long time, and a late notification
 	// is better than a reaped one.
-	const TICKET_TTL        = 3 * DAY_IN_SECONDS;
+	const TICKET_TTL = 3 * DAY_IN_SECONDS;
 
 	/**
 	 * Register queue processing and expired-payload cleanup.
