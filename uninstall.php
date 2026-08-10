@@ -29,28 +29,31 @@ delete_option( 'telegrarm_arm_mapping' );
 delete_option( 'telegrarm_version' );
 
 wp_clear_scheduled_hook( 'telegrarm_process_delivery' );
+wp_clear_scheduled_hook( 'telegrarm_cleanup_deliveries' );
 
 /**
  * Delete queued delivery payloads, pacing markers, and dedupe markers.
  *
- * Queued payloads use randomized transient names, so they cannot be removed
- * through named delete_transient() calls.
+ * Queued payloads use randomized names, so they cannot be removed through
+ * named delete_option() or delete_transient() calls.
  *
  * @return void
  */
-function telegrarm_uninstall_delete_transients() {
+function telegrarm_uninstall_delete_queue_rows() {
 	global $wpdb;
 
-	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Randomized transient names cannot be resolved through the options API.
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Randomized option and transient names cannot be resolved through the options API.
 	$wpdb->query(
 		$wpdb->prepare(
 			"DELETE FROM {$wpdb->options}
 			 WHERE option_name LIKE %s
+			    OR option_name LIKE %s
 			    OR option_name LIKE %s",
 			$wpdb->esc_like( '_transient_telegrarm_' ) . '%',
-			$wpdb->esc_like( '_transient_timeout_telegrarm_' ) . '%'
+			$wpdb->esc_like( '_transient_timeout_telegrarm_' ) . '%',
+			$wpdb->esc_like( 'telegrarm_job_' ) . '%'
 		)
 	);
 }
 
-telegrarm_uninstall_delete_transients();
+telegrarm_uninstall_delete_queue_rows();

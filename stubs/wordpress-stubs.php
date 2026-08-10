@@ -60,10 +60,18 @@ function get_option(string $option, $default_value = false) {
 }
 
 function add_option(string $option, $value = '', string $deprecated = '', bool $autoload = true): bool {
+    if (isset($GLOBALS['telegrarm_test_options']) && array_key_exists($option, $GLOBALS['telegrarm_test_options'])) {
+        return false;
+    }
+
+    $GLOBALS['telegrarm_test_options'][$option] = $value;
+
     return true;
 }
 
 function update_option(string $option, $value, ?bool $autoload = null): bool {
+    $GLOBALS['telegrarm_test_options'][$option] = $value;
+
     return true;
 }
 
@@ -72,6 +80,8 @@ function wp_set_option_autoload_values(array $options): array {
 }
 
 function delete_option(string $option): bool {
+    unset($GLOBALS['telegrarm_test_options'][$option]);
+
     return true;
 }
 
@@ -168,12 +178,76 @@ function wp_generate_password(int $length = 12, bool $special_chars = true, bool
 }
 
 function wp_schedule_single_event(int $timestamp, string $hook, array $args = array(), bool $wp_error = false): bool|WP_Error {
+    // Tests set this to emulate WordPress refusing a duplicate event.
+    if (isset($GLOBALS['telegrarm_test_schedule_refused']) && true === $GLOBALS['telegrarm_test_schedule_refused']) {
+        return false;
+    }
+
     $GLOBALS['telegrarm_test_scheduled_events'][] = array('timestamp' => $timestamp, 'hook' => $hook, 'args' => $args);
     return true;
 }
 
 function wp_clear_scheduled_hook(string $hook, array $args = array(), bool $wp_error = false): int|false|WP_Error {
     return 0;
+}
+
+/** Minimal wpdb stand-in backed by the stubbed options store. */
+class TelegrARM_Test_wpdb {
+    public string $options = 'wp_options';
+
+    public function esc_like(string $text): string {
+        return addcslashes($text, '_%\\');
+    }
+
+    /**
+     * @param mixed ...$args
+     */
+    public function prepare(string $query, ...$args): string {
+        foreach ($args as $arg) {
+            $query = preg_replace('/%s/', "'" . str_replace("'", "''", (string) $arg) . "'", $query, 1);
+        }
+
+        return (string) $query;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function get_col(string $query): array {
+        if (!preg_match("/LIKE '([^']*)%'/", $query, $matches)) {
+            return array();
+        }
+
+        $prefix = stripcslashes($matches[1]);
+
+        return array_values(
+            array_filter(
+                array_keys((array) ($GLOBALS['telegrarm_test_options'] ?? array())),
+                static function ($name) use ($prefix): bool {
+                    return is_string($name) && 0 === strpos($name, $prefix);
+                }
+            )
+        );
+    }
+}
+
+/**
+ * @return int|false
+ */
+function wp_next_scheduled(string $hook, array $args = array()) {
+    foreach ((array) ($GLOBALS['telegrarm_test_scheduled_events'] ?? array()) as $event) {
+        if ($event['hook'] === $hook && $event['args'] === $args) {
+            return (int) $event['timestamp'];
+        }
+    }
+
+    return false;
+}
+
+function wp_schedule_event(int $timestamp, string $recurrence, string $hook, array $args = array(), bool $wp_error = false): bool|WP_Error {
+    $GLOBALS['telegrarm_test_scheduled_events'][] = array('timestamp' => $timestamp, 'hook' => $hook, 'args' => $args, 'recurrence' => $recurrence);
+
+    return true;
 }
 
 function plugin_basename(string $file): string {

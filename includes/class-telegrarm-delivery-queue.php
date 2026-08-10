@@ -12,18 +12,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 /** Queue, rate-limit, and retry bounded Telegram deliveries. */
 final class TelegrARM_Delivery_Queue {
 	const HOOK              = 'telegrarm_process_delivery';
+	const GC_HOOK           = 'telegrarm_cleanup_deliveries';
 	const MAX_ATTEMPTS      = 3;
 	const MIN_SEND_INTERVAL = 4;
 	const TICKET_PREFIX     = 'telegrarm_job_';
-	const TICKET_TTL        = 6 * HOUR_IN_SECONDS;
+	// Generous, because WP-Cron only fires on visitor requests: a quiet site can
+	// leave a scheduled delivery waiting for a long time, and a late notification
+	// is better than a reaped one.
+	const TICKET_TTL        = 3 * DAY_IN_SECONDS;
 
 	/**
-	 * Register queue processing.
+	 * Register queue processing and expired-payload cleanup.
 	 *
 	 * @return void
 	 */
 	public static function register() {
 		add_action( self::HOOK, array( __CLASS__, 'process' ), 10, 1 );
+		add_action( self::GC_HOOK, array( __CLASS__, 'collect_garbage' ) );
+
+		if ( false === wp_next_scheduled( self::GC_HOOK ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::GC_HOOK );
+		}
 	}
 
 	/**
@@ -56,6 +65,14 @@ final class TelegrARM_Delivery_Queue {
 
 		set_transient( $dedupe_key, 1, MINUTE_IN_SECONDS );
 
+		TelegrARM_Debug_Logger::log(
+			'Telegram delivery queued.',
+			array(
+				'method' => $payload['method'],
+				'target' => $payload['target'],
+			)
+		);
+
 		return self::schedule( $payload, time() + 1 );
 	}
 
@@ -63,7 +80,9 @@ final class TelegrARM_Delivery_Queue {
 	 * Store a payload behind an opaque ticket and schedule its delivery.
 	 *
 	 * Member data is kept out of the autoloaded `cron` option: only the ticket
-	 * is passed as a cron argument.
+	 * is passed as a cron argument. The payload itself lives in a
+	 * non-autoloaded option rather than a transient, so it survives an object
+	 * cache flush between scheduling and delivery.
 	 *
 	 * @param array  $payload   Queue payload.
 	 * @param int    $timestamp Scheduled timestamp.
@@ -71,19 +90,75 @@ final class TelegrARM_Delivery_Queue {
 	 * @return bool
 	 */
 	private static function schedule( array $payload, $timestamp, $ticket = '' ) {
-		if ( ! is_string( $ticket ) || '' === $ticket ) {
+		$is_new_ticket = ! is_string( $ticket ) || '' === $ticket;
+
+		if ( $is_new_ticket ) {
 			$ticket = self::TICKET_PREFIX . wp_generate_password( 20, false, false );
 		}
 
-		set_transient( $ticket, $payload, self::TICKET_TTL );
+		self::remember( $ticket, $payload );
 
-		if ( false === wp_schedule_single_event( (int) $timestamp, self::HOOK, array( $ticket ) ) ) {
+		if ( false !== wp_schedule_single_event( (int) $timestamp, self::HOOK, array( $ticket ) ) ) {
+			return true;
+		}
+
+		if ( $is_new_ticket ) {
 			TelegrARM_Debug_Logger::log( 'Telegram delivery could not be scheduled; stored payload discarded.' );
-			delete_transient( $ticket );
+			self::forget( $ticket );
 			return false;
 		}
 
+		// A reused ticket was refused as a duplicate, so an equivalent event is
+		// already scheduled. Keep the payload: deleting it would strand that event.
+		TelegrARM_Debug_Logger::log(
+			'Telegram delivery reschedule refused as duplicate; stored payload retained.',
+			array( 'target' => $payload['target'] )
+		);
+
 		return true;
+	}
+
+	/**
+	 * Persist a payload against its ticket with a bounded lifetime.
+	 *
+	 * @param string $ticket  Ticket identifier.
+	 * @param array  $payload Queue payload.
+	 * @return void
+	 */
+	private static function remember( $ticket, array $payload ) {
+		$record = array(
+			'payload' => $payload,
+			'expires' => time() + self::TICKET_TTL,
+		);
+
+		if ( false === add_option( $ticket, $record, '', false ) ) {
+			update_option( $ticket, $record, false );
+		}
+	}
+
+	/**
+	 * Read a stored payload, discarding it once it has expired.
+	 *
+	 * @param string $ticket Ticket identifier.
+	 * @return array<string, mixed>
+	 */
+	private static function recall( $ticket ) {
+		$record = get_option( $ticket, false );
+
+		if ( ! is_array( $record ) || ! isset( $record['payload'] ) || ! is_array( $record['payload'] ) ) {
+			// Tickets queued before 1.1.2 stored the payload in a transient.
+			$legacy = get_transient( $ticket );
+
+			return is_array( $legacy ) ? $legacy : array();
+		}
+
+		// A record without a usable expiry is a partial write; reap it rather than keep it forever.
+		if ( ! isset( $record['expires'] ) || ! is_scalar( $record['expires'] ) || (int) $record['expires'] < time() ) {
+			self::forget( $ticket );
+			return array();
+		}
+
+		return $record['payload'];
 	}
 
 	/**
@@ -94,7 +169,32 @@ final class TelegrARM_Delivery_Queue {
 	 */
 	private static function forget( $ticket ) {
 		if ( is_string( $ticket ) && '' !== $ticket ) {
+			delete_option( $ticket );
 			delete_transient( $ticket );
+		}
+	}
+
+	/**
+	 * Remove payloads whose cron event never ran before they expired.
+	 *
+	 * Stored payloads are options now, so nothing removes them automatically.
+	 *
+	 * @return void
+	 */
+	public static function collect_garbage() {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Randomized ticket names cannot be resolved through the options API.
+		$tickets = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( self::TICKET_PREFIX ) . '%'
+			)
+		);
+
+		foreach ( (array) $tickets as $ticket ) {
+			// recall() deletes the record when it has expired.
+			self::recall( (string) $ticket );
 		}
 	}
 
@@ -108,9 +208,9 @@ final class TelegrARM_Delivery_Queue {
 		$ticket = is_string( $payload ) ? $payload : '';
 
 		if ( '' !== $ticket ) {
-			$stored = get_transient( $ticket );
+			$stored = self::recall( $ticket );
 
-			if ( ! is_array( $stored ) ) {
+			if ( empty( $stored ) ) {
 				TelegrARM_Debug_Logger::log( 'Queued delivery skipped: stored payload expired.' );
 				return;
 			}
@@ -121,6 +221,7 @@ final class TelegrARM_Delivery_Queue {
 		$payload = self::sanitize_payload( $payload );
 
 		if ( empty( $payload ) ) {
+			TelegrARM_Debug_Logger::log( 'Queued delivery skipped: payload failed validation.' );
 			self::forget( $ticket );
 			return;
 		}
@@ -148,6 +249,13 @@ final class TelegrARM_Delivery_Queue {
 		$response = $client->send( $payload['method'], $body );
 
 		if ( ! is_wp_error( $response ) && TelegrARM_Telegram_Client::is_success( $response ) ) {
+			TelegrARM_Debug_Logger::log(
+				'Telegram delivery sent.',
+				array(
+					'method' => $payload['method'],
+					'target' => $payload['target'],
+				)
+			);
 			self::forget( $ticket );
 			return;
 		}
@@ -167,7 +275,14 @@ final class TelegrARM_Delivery_Queue {
 		++$payload['attempt'];
 
 		if ( $payload['attempt'] >= self::MAX_ATTEMPTS ) {
-			TelegrARM_Debug_Logger::log( 'Telegram delivery abandoned after bounded retries.', array( 'attempt' => $payload['attempt'] ) );
+			TelegrARM_Debug_Logger::log(
+				'Telegram delivery abandoned after bounded retries.',
+				array(
+					'attempt' => $payload['attempt'],
+					'method'  => $payload['method'],
+					'target'  => $payload['target'],
+				)
+			);
 			self::forget( $ticket );
 			return;
 		}
@@ -182,7 +297,16 @@ final class TelegrARM_Delivery_Queue {
 		$status_code = (int) $details['status_code'];
 
 		if ( ! is_wp_error( $response ) && 429 !== $status_code && $status_code < 500 ) {
-			TelegrARM_Debug_Logger::log( 'Telegram delivery rejected without retry.', $details );
+			TelegrARM_Debug_Logger::log(
+				'Telegram delivery rejected without retry.',
+				array_merge(
+					$details,
+					array(
+						'method' => $payload['method'],
+						'target' => $payload['target'],
+					)
+				)
+			);
 			self::forget( $ticket );
 			return;
 		}

@@ -12,6 +12,17 @@ final class DeliveryTest extends TestCase {
         $GLOBALS['telegrarm_test_transients'] = array();
         $GLOBALS['telegrarm_test_scheduled_events'] = array();
         $GLOBALS['telegrarm_test_remote_requests'] = array();
+        $GLOBALS['telegrarm_test_schedule_refused'] = false;
+    }
+
+    /**
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private function queued_ticket_and_payload(): array {
+        $ticket = $GLOBALS['telegrarm_test_scheduled_events'][0]['args'][0];
+        $record = $GLOBALS['telegrarm_test_options'][$ticket];
+
+        return array($ticket, $record['payload']);
     }
 
     public function test_profile_hook_queues_without_blocking_on_http(): void {
@@ -21,11 +32,10 @@ final class DeliveryTest extends TestCase {
         $this->assertSame(TelegrARM_Delivery_Queue::HOOK, $GLOBALS['telegrarm_test_scheduled_events'][0]['hook']);
         $this->assertCount(0, $GLOBALS['telegrarm_test_remote_requests']);
 
-        $ticket = $GLOBALS['telegrarm_test_scheduled_events'][0]['args'][0];
+        list($ticket, $payload) = $this->queued_ticket_and_payload();
         $this->assertIsString($ticket);
         $this->assertStringStartsWith(TelegrARM_Delivery_Queue::TICKET_PREFIX, $ticket);
 
-        $payload = $GLOBALS['telegrarm_test_transients'][$ticket];
         $this->assertStringContainsString('First Name: Renato', $payload['body']['text']);
         $this->assertStringNotContainsString('not sent', $payload['body']['text']);
         $this->assertArrayNotHasKey('chat_id', $payload['body']);
@@ -80,6 +90,83 @@ final class DeliveryTest extends TestCase {
         $this->assertSame(429, $details['status_code']);
         $this->assertFalse($details['ok']);
         $this->assertSame(300, $details['retry_after']);
+    }
+
+    public function test_payload_survives_an_object_cache_flush(): void {
+        telegrarm_profile_update(42, array('first_name' => 'Renato'));
+
+        list($ticket) = $this->queued_ticket_and_payload();
+
+        // Emulate a persistent object cache being flushed: transients vanish,
+        // options do not.
+        $GLOBALS['telegrarm_test_transients'] = array();
+
+        TelegrARM_Delivery_Queue::process($ticket);
+
+        $this->assertCount(1, $GLOBALS['telegrarm_test_remote_requests']);
+        $this->assertArrayNotHasKey($ticket, $GLOBALS['telegrarm_test_options']);
+    }
+
+    public function test_expired_payload_is_dropped_and_not_sent(): void {
+        telegrarm_profile_update(42, array('first_name' => 'Renato'));
+
+        list($ticket) = $this->queued_ticket_and_payload();
+        $GLOBALS['telegrarm_test_options'][$ticket]['expires'] = time() - 1;
+
+        TelegrARM_Delivery_Queue::process($ticket);
+
+        $this->assertCount(0, $GLOBALS['telegrarm_test_remote_requests']);
+        $this->assertArrayNotHasKey($ticket, $GLOBALS['telegrarm_test_options']);
+    }
+
+    public function test_refused_reschedule_keeps_the_payload_for_the_live_event(): void {
+        $channel_id = '-1001234567890';
+        $GLOBALS['telegrarm_test_transients']['telegrarm_rate_' . md5($channel_id)] = time();
+
+        telegrarm_profile_update(42, array('first_name' => 'Renato'));
+
+        list($ticket) = $this->queued_ticket_and_payload();
+
+        // WordPress refuses the deferral as a duplicate of the live event.
+        $GLOBALS['telegrarm_test_schedule_refused'] = true;
+
+        TelegrARM_Delivery_Queue::process($ticket);
+
+        $this->assertCount(0, $GLOBALS['telegrarm_test_remote_requests']);
+        $this->assertArrayHasKey($ticket, $GLOBALS['telegrarm_test_options']);
+    }
+
+    public function test_garbage_collection_reaps_only_expired_payloads(): void {
+        $GLOBALS['wpdb'] = new TelegrARM_Test_wpdb();
+
+        telegrarm_profile_update(42, array('first_name' => 'Renato'));
+        $live = $GLOBALS['telegrarm_test_scheduled_events'][0]['args'][0];
+
+        $stale = TelegrARM_Delivery_Queue::TICKET_PREFIX . 'stale';
+        $GLOBALS['telegrarm_test_options'][$stale] = array(
+            'payload' => array('method' => 'sendMessage', 'target' => 'profile', 'body' => array('text' => 'old')),
+            'expires' => time() - 1,
+        );
+
+        TelegrARM_Delivery_Queue::collect_garbage();
+
+        $this->assertArrayHasKey($live, $GLOBALS['telegrarm_test_options']);
+        $this->assertArrayNotHasKey($stale, $GLOBALS['telegrarm_test_options']);
+    }
+
+    public function test_legacy_transient_payloads_still_deliver(): void {
+        $ticket = TelegrARM_Delivery_Queue::TICKET_PREFIX . 'legacy';
+
+        $GLOBALS['telegrarm_test_transients'][$ticket] = array(
+            'method'  => 'sendMessage',
+            'target'  => 'profile',
+            'body'    => array('text' => 'legacy', 'parse_mode' => 'HTML'),
+            'attempt' => 0,
+        );
+
+        TelegrARM_Delivery_Queue::process($ticket);
+
+        $this->assertCount(1, $GLOBALS['telegrarm_test_remote_requests']);
     }
 
     public function test_client_rejects_malformed_token_before_http(): void {
