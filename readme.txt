@@ -5,8 +5,8 @@ Requires at least: 7.0
 Tested up to: 7.0.3
 Requires PHP: 8.0
 Requires Plugins: armember-membership
-Stable tag: 1.1.1
-Version: 1.1.1
+Stable tag: 1.1.2
+Version: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,12 @@ Yes. Enable **Send contact on new user registration?**, then configure the phone
 Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 1.1.2 =
+- Fixed queued notifications being silently dropped when a persistent object cache was flushed after the delivery was scheduled, by storing payloads in randomized, non-autoloaded options instead of transients.
+- Fixed the pacing and retry paths deleting the payload of a delivery that was still scheduled, which could strand a live event when two cron spawns overlapped.
+- Added a daily cleanup event for payloads whose delivery never ran, and raised their lifetime from six hours to three days so a quiet site does not reap them before WP-Cron fires.
+- Logged queued and successful deliveries, and reported the method and target on every drop path, so a missing notification can be diagnosed from the debug log.
 
 = 1.1.1 =
 - Declared ARMember as a required plugin through the `Requires Plugins` header, so WordPress blocks TelegrARM activation until ARMember is installed and active.
@@ -154,6 +160,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 1.1.2 =
+Reliability fix release for sites running a persistent object cache, where queued notifications could be lost before WP-Cron delivered them. No settings or data changes, and deliveries queued by earlier versions are processed without migration.
 
 = 1.1.1 =
 ARMember is now a hard requirement: TelegrARM cannot be activated unless a plugin folder named armember-membership is installed and active. Existing ARMember Lite sites are unaffected. Sites running ARMember Premium from CodeCanyon, or installing ARMember for the first time, cannot satisfy this dependency and should stay on 1.1.0.

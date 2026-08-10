@@ -56,3 +56,6 @@ wp-config.php
 .tools/
 temp/
 .phpunit.result.cache
+
+# Release archives are built locally into dist/ and attached to GitHub releases.
+/dist/

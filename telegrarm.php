@@ -3,7 +3,7 @@
  * Plugin Name:       TelegrARM
  * Plugin URI:        https://github.com/renatobo/TelegrARM
  * Description:       Enable Telegram notifications for user profile updates and other ARMember events.
- * Version:           1.1.1
+ * Version:           1.1.2
  * Requires at least: 7.0
  * Requires PHP:      8.0
  * Requires Plugins:  armember-membership
@@ -30,7 +30,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BONO_TELEGRARM_VERSION', '1.1.1' );
+define( 'BONO_TELEGRARM_VERSION', '1.1.2' );
 
 require_once __DIR__ . '/includes/class-telegrarm-config.php';
 require_once __DIR__ . '/includes/class-telegrarm-debug-logger.php';
