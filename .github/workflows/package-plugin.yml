@@ -50,7 +50,7 @@ jobs:
           ./scripts/validate-package "${{ steps.build.outputs.zip_path }}"
 
       - name: Attest plugin package
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.build.outputs.zip_path }}
 
