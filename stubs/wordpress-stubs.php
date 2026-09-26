@@ -23,6 +23,15 @@ class WP_Error {
     }
 }
 
+class WP_User {
+    /** @var object */
+    public $data;
+
+    public function __construct() {
+        $this->data = new stdClass();
+    }
+}
+
 /**
  * @param callable|string $callback
  */
@@ -42,6 +51,15 @@ function apply_filters(string $hook_name, $value, ...$args) {
 }
 
 function register_activation_hook(string $file, $callback): void {}
+
+function register_deactivation_hook(string $file, $callback): void {}
+
+/**
+ * @param mixed ...$args
+ */
+function do_action(string $hook_name, ...$args): void {
+    $GLOBALS['telegrarm_test_actions'][] = array('hook' => $hook_name, 'args' => $args);
+}
 
 function is_admin(): bool {
     return true;
@@ -102,8 +120,29 @@ function esc_attr(string $text): string {
     return $text;
 }
 
-function esc_url(string $url): string {
+/**
+ * @param array<int, string>|null $protocols
+ */
+function esc_url(string $url, ?array $protocols = null, string $_context = 'display'): string {
     return $url;
+}
+
+function wp_kses_post(string $data): string {
+    return $data;
+}
+
+function wpautop(string $text, bool $br = true): string {
+    return '<p>' . $text . '</p>';
+}
+
+function wp_add_privacy_policy_content(string $plugin_name, string $policy_text): void {}
+
+/**
+ * @param mixed $disabled
+ * @param mixed $current
+ */
+function disabled($disabled, $current = true, bool $display = true): string {
+    return (string) $disabled === (string) $current ? " disabled='disabled'" : '';
 }
 
 function sanitize_text_field(string $str): string {
@@ -188,7 +227,33 @@ function wp_schedule_single_event(int $timestamp, string $hook, array $args = ar
 }
 
 function wp_clear_scheduled_hook(string $hook, array $args = array(), bool $wp_error = false): int|false|WP_Error {
+    $GLOBALS['telegrarm_test_cleared_hooks'][] = $hook;
     return 0;
+}
+
+function wp_unschedule_hook(string $hook, bool $wp_error = false): int|false|WP_Error {
+    $GLOBALS['telegrarm_test_cleared_hooks'][] = $hook;
+    return 0;
+}
+
+function is_multisite(): bool {
+    return false;
+}
+
+/**
+ * @param array<string, mixed> $args
+ * @return array<int, mixed>
+ */
+function get_sites(array $args = array()): array {
+    return array();
+}
+
+function switch_to_blog(int $new_blog_id, bool $deprecated = false): bool {
+    return true;
+}
+
+function restore_current_blog(): bool {
+    return true;
 }
 
 /** Minimal wpdb stand-in backed by the stubbed options store. */
@@ -354,6 +419,19 @@ function wp_send_json_error($value = null, ?int $status_code = null, int $flags 
 
 /**
  * @param mixed $data
+ */
+function is_serialized($data, bool $strict = true): bool {
+    if (!is_string($data)) {
+        return false;
+    }
+
+    $data = trim($data);
+
+    return 'N;' === $data || 1 === preg_match('/^[aOsbid]:[0-9.E+-]*[:;{]/s', $data) && in_array(substr($data, -1), array(';', '}'), true);
+}
+
+/**
+ * @param mixed $data
  * @return mixed
  */
 function maybe_unserialize($data) {
@@ -365,6 +443,20 @@ function maybe_unserialize($data) {
  */
 function get_user_meta(int $user_id, string $key = '', bool $single = false): array {
     return isset($GLOBALS['telegrarm_test_user_meta'][$user_id]) ? $GLOBALS['telegrarm_test_user_meta'][$user_id] : array();
+}
+
+/**
+ * @return WP_User|false
+ */
+function get_userdata(int $user_id) {
+    if (!isset($GLOBALS['telegrarm_test_users'][$user_id])) {
+        return false;
+    }
+
+    $user = new WP_User();
+    $user->data = (object) $GLOBALS['telegrarm_test_users'][$user_id];
+
+    return $user;
 }
 
 /**

@@ -76,7 +76,7 @@ Delivery still depends on WP-Cron, which only runs on visitor requests. `TICKET_
 ## WordPress Integration Points
 
 ### ARMember Hooks
-- `arm_update_profile_external` - Triggered when users update their profile
+- `arm_member_update_meta` + `arm_record_activity` (`type` `update_profile`) - Profile updates. The first captures the member's submission (flag `0` only), the second sends it. Both ARMember Lite and Pro fire this pair, and Lite disables its own form handler when Pro is active. Do not hook `arm_update_profile_external`: only Pro fires it, so Lite sites never notify
 - `arm_after_new_user_notification` - Triggered when new users register
 
 ### WordPress Options

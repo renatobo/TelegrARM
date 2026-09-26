@@ -86,6 +86,7 @@ Please include the following information in your report:
 - Ensure compliance with privacy regulations (GDPR, CCPA, etc.)
 - Inform users that their data may be sent to Telegram
 - Only send necessary information in notifications
+- Credential and privilege keys (`user_pass`, `session_tokens`, `*_capabilities`, and keys containing `password`, `secret`, `token`, and similar) are rejected from the field mapping and never included in a message
 
 ### Input Validation
 
@@ -106,6 +107,7 @@ The plugin sanitizes and validates:
 - Telegram API calls use WordPress HTTP API with SSL verification
 - API tokens are never exposed in client-side code
 - Failed API calls are logged securely without exposing sensitive data
+- The Telegram Bot API requires the token in the request URL path (`https://api.telegram.org/bot<token>/...`). Any plugin that logs outbound HTTP requests, for example through the `http_api_debug` action, records the full URL and therefore the token. Keep outbound request logging disabled in production, and regenerate the token with @BotFather if such logs were ever collected
 
 ## Security Features
 
@@ -132,6 +134,6 @@ No security vulnerabilities have been reported or disclosed to date.
 
 ---
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-09-26
 
 For general questions about this security policy, please open a public GitHub issue.

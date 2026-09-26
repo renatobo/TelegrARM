@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once __DIR__ . '/admin/telegrarm-field-discovery.php';
 
 add_action( 'admin_init', 'telegrarm_settings_init' );
+add_action( 'admin_init', 'telegrarm_add_privacy_policy_content' );
 add_action( 'admin_menu', 'telegrarm_settings_menu' );
 add_action( 'admin_enqueue_scripts', 'telegrarm_enqueue_admin_assets' );
 add_action( 'wp_ajax_telegrarm_discover_arm_metakeys', 'telegrarm_ajax_discover_arm_metakeys' );
@@ -186,6 +187,26 @@ function telegrarm_settings_init() {
 }
 
 /**
+ * Suggest privacy policy text describing the data sent to Telegram.
+ *
+ * @return void
+ */
+function telegrarm_add_privacy_policy_content() {
+	if ( ! function_exists( 'wp_add_privacy_policy_content' ) ) {
+		return;
+	}
+
+	wp_add_privacy_policy_content(
+		__( 'TelegrARM', 'telegrarm' ),
+		wp_kses_post(
+			wpautop(
+				__( 'When members register or update their profile, this site can send a notification to a Telegram chat operated by the site administrators. The notification contains the profile fields the administrators selected, which may include name, email address, and other profile details. When contact cards are enabled, the member\'s phone number and name are also sent. Telegram processes this data under its own privacy policy: https://telegram.org/privacy', 'telegrarm' )
+			)
+		)
+	);
+}
+
+/**
  * Sanitize checkbox values.
  *
  * @param mixed $value Submitted option value.
@@ -242,18 +263,10 @@ function telegrarm_get_telegram_response_details( $response ) {
  * @param array<string, mixed>|mixed $response HTTP response.
  * @return string
  */
-if ( ! function_exists( 'telegrarm_get_telegram_error_message' ) ) {
-	/**
-	 * Extract a readable Telegram API error without triggering notices.
-	 *
-	 * @param array<string, mixed>|mixed $response HTTP response.
-	 * @return string
-	 */
-	function telegrarm_get_telegram_error_message( $response ) {
-		$details = telegrarm_get_telegram_response_details( $response );
+function telegrarm_get_telegram_error_message( $response ) {
+	$details = telegrarm_get_telegram_response_details( $response );
 
-		return $details['description'];
-	}
+	return $details['description'];
 }
 
 /**
@@ -370,7 +383,8 @@ function telegrarm_build_test_message_feedback( $target, $channel_id, $response,
 		$lines[] = sprintf( __( 'Telegram error code: %d', 'telegrarm' ), (int) $details['error_code'] );
 	}
 
-	if ( '' !== trim( (string) $details['description'] ) ) {
+	// On success Telegram sends no description, so the parser's fallback text would mislead.
+	if ( ! $request_succeeded && '' !== trim( (string) $details['description'] ) ) {
 		/* translators: %s: Telegram API error description. */
 		$lines[] = sprintf( __( 'Telegram description: %s', 'telegrarm' ), $details['description'] );
 	}
@@ -512,7 +526,7 @@ function telegrarm_ajax_send_test_message() {
 			array(
 				'message' => telegrarm_build_test_message_feedback( $target, $channel_id, $result, false ),
 			),
-			400
+			502
 		);
 	}
 
@@ -710,6 +724,7 @@ function telegrarm_arm_mapping_sanitize( $input ) {
 	}
 
 	$sanitized = array();
+	$rejected  = array();
 
 	foreach ( $decoded as $key => $label ) {
 		if ( ! is_scalar( $key ) || ! is_scalar( $label ) ) {
@@ -723,7 +738,25 @@ function telegrarm_arm_mapping_sanitize( $input ) {
 			continue;
 		}
 
+		if ( TelegrARM_Message_Formatter::is_sensitive_key( $mapping_key ) ) {
+			$rejected[] = $mapping_key;
+			continue;
+		}
+
 		$sanitized[ $mapping_key ] = $mapping_label;
+	}
+
+	if ( ! empty( $rejected ) ) {
+		add_settings_error(
+			'telegrarm_arm_mapping',
+			'telegrarm_arm_mapping_sensitive',
+			sprintf(
+				/* translators: %s: Comma-separated list of rejected field keys. */
+				__( 'These fields hold credentials or permissions and were removed from the mapping: %s', 'telegrarm' ),
+				implode( ', ', $rejected )
+			),
+			'warning'
+		);
 	}
 
 	if ( empty( $sanitized ) ) {
@@ -770,6 +803,7 @@ function telegrarm_settings_page_cb() {
 	$profile_update_enabled = (bool) get_option( 'telegrarm_profile_update', false );
 	$send_contact_enabled   = (bool) get_option( 'telegram_send_contact_during_registration', false );
 	$debug_logging_enabled  = (bool) get_option( 'telegrarm_debug_logging', false );
+	$token_from_constant    = defined( 'TELEGRARM_BOT_TOKEN' );
 	$mapping_json           = wp_json_encode(
 		telegrarm_get_arm_mapping(),
 		JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -808,7 +842,8 @@ function telegrarm_settings_page_cb() {
 				</p>
 			</div>
 
-			<?php settings_errors(); ?>
+			<?php // WordPress prints settings notices itself on Settings pages and moves them here. ?>
+			<hr class="wp-header-end">
 
 			<nav class="nav-tab-wrapper telegrarm-tabs" role="tablist" aria-label="<?php echo esc_attr__( 'TelegrARM settings sections', 'telegrarm' ); ?>">
 				<a href="#bot" class="nav-tab telegrarm-tab nav-tab-active" role="tab" aria-selected="true" data-panel="bot">
@@ -846,7 +881,15 @@ function telegrarm_settings_page_cb() {
 								<p><?php esc_html_e( 'This token is used for both message and contact delivery through the Telegram Bot API.', 'telegrarm' ); ?></p>
 							</div>
 							<span class="telegrarm-badge <?php echo '' !== TelegrARM_Config::get_bot_token() ? 'is-enabled' : 'is-disabled'; ?>">
-								<?php echo '' !== TelegrARM_Config::get_bot_token() ? esc_html__( 'Configured', 'telegrarm' ) : esc_html__( 'Missing', 'telegrarm' ); ?>
+								<?php
+								if ( $token_from_constant ) {
+									esc_html_e( 'Set in wp-config.php', 'telegrarm' );
+								} elseif ( '' !== TelegrARM_Config::get_bot_token() ) {
+									esc_html_e( 'Configured', 'telegrarm' );
+								} else {
+									esc_html_e( 'Missing', 'telegrarm' );
+								}
+								?>
 							</span>
 						</div>
 
@@ -860,12 +903,17 @@ function telegrarm_settings_page_cb() {
 								value=""
 								placeholder="<?php echo esc_attr__( 'Leave blank to keep the configured token', 'telegrarm' ); ?>"
 								autocomplete="new-password"
+								<?php disabled( $token_from_constant ); ?>
 							/>
-							<span class="description"><?php esc_html_e( 'Create the bot with @BotFather. Existing tokens are never redisplayed; enter a value only to replace it.', 'telegrarm' ); ?></span>
-							<label>
-								<input type="checkbox" name="telegrarm_clear_bot_token" value="1" />
-								<?php esc_html_e( 'Remove the saved token when settings are saved', 'telegrarm' ); ?>
-							</label>
+							<?php if ( $token_from_constant ) : ?>
+								<span class="description"><?php esc_html_e( 'The token is defined by the TELEGRARM_BOT_TOKEN constant in wp-config.php, which overrides any saved value. Edit wp-config.php to change it.', 'telegrarm' ); ?></span>
+							<?php else : ?>
+								<span class="description"><?php esc_html_e( 'Create the bot with @BotFather. Existing tokens are never redisplayed; enter a value only to replace it.', 'telegrarm' ); ?></span>
+								<label>
+									<input type="checkbox" name="telegrarm_clear_bot_token" value="1" />
+									<?php esc_html_e( 'Remove the saved token when settings are saved', 'telegrarm' ); ?>
+								</label>
+							<?php endif; ?>
 						</label>
 
 						<div class="telegrarm-grid telegrarm-grid-two">
@@ -1005,7 +1053,7 @@ function telegrarm_settings_page_cb() {
 						<div class="telegrarm-switch-row">
 							<div>
 								<h3><?php esc_html_e( 'Enable profile update notifications', 'telegrarm' ); ?></h3>
-								<p><?php esc_html_e( 'Loads the handler for arm_update_profile_external only when enabled.', 'telegrarm' ); ?></p>
+								<p><?php esc_html_e( 'Sends a notification when a member saves their own profile through an ARMember edit-profile form. Registrations and administrator edits are not reported.', 'telegrarm' ); ?></p>
 							</div>
 							<label class="telegrarm-toggle">
 								<input
@@ -1071,9 +1119,14 @@ function telegrarm_settings_page_cb() {
 									<h3><?php esc_html_e( 'Discover ARMember fields', 'telegrarm' ); ?></h3>
 									<p><?php esc_html_e( 'Pull ARMember field keys from the plugin registry first, then fall back to stored user meta only if those registry sources are unavailable.', 'telegrarm' ); ?></p>
 								</div>
-								<button type="button" class="button button-primary" id="telegrarm-discover-metakeys">
-									<?php esc_html_e( 'Discover fields', 'telegrarm' ); ?>
-								</button>
+								<span class="telegrarm-discovery-actions">
+									<button type="button" class="button button-primary" id="telegrarm-discover-metakeys">
+										<?php esc_html_e( 'Discover fields', 'telegrarm' ); ?>
+									</button>
+									<button type="button" class="button" id="telegrarm-rescan-metakeys">
+										<?php esc_html_e( 'Rescan', 'telegrarm' ); ?>
+									</button>
+								</span>
 							</div>
 
 							<p class="description"><?php esc_html_e( 'Use the results below to select the keys you want, edit their labels, and generate the JSON back into the textarea above.', 'telegrarm' ); ?></p>

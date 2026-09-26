@@ -29,9 +29,45 @@ final class TelegrARM_Delivery_Queue {
 	public static function register() {
 		add_action( self::HOOK, array( __CLASS__, 'process' ), 10, 1 );
 		add_action( self::GC_HOOK, array( __CLASS__, 'collect_garbage' ) );
+	}
 
+	/**
+	 * Ensure the daily expired-payload cleanup is scheduled.
+	 *
+	 * Called on activation and after version changes, not on every request.
+	 *
+	 * @return void
+	 */
+	public static function schedule_cleanup() {
 		if ( false === wp_next_scheduled( self::GC_HOOK ) ) {
 			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::GC_HOOK );
+		}
+	}
+
+	/**
+	 * Stop all queue events and discard stored payloads on deactivation.
+	 *
+	 * Pending deliveries would otherwise fire with no handler and leave their
+	 * member data behind in the options table.
+	 *
+	 * @return void
+	 */
+	public static function deactivate() {
+		global $wpdb;
+
+		wp_clear_scheduled_hook( self::GC_HOOK );
+		wp_unschedule_hook( self::HOOK );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Randomized ticket names cannot be resolved through the options API.
+		$tickets = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( self::TICKET_PREFIX ) . '%'
+			)
+		);
+
+		foreach ( (array) $tickets as $ticket ) {
+			self::forget( (string) $ticket );
 		}
 	}
 
@@ -57,6 +93,18 @@ final class TelegrARM_Delivery_Queue {
 			return false;
 		}
 
+		/**
+		 * Filter whether a Telegram delivery is queued.
+		 *
+		 * @param bool   $should_enqueue Whether to queue the delivery.
+		 * @param string $method         Bot API method.
+		 * @param string $target         Configuration target: 'new-user' or 'profile'.
+		 * @param array  $body           Sanitized request body, without chat ID.
+		 */
+		if ( ! apply_filters( 'telegrarm_should_enqueue', true, $payload['method'], $payload['target'], $payload['body'] ) ) {
+			return false;
+		}
+
 		$dedupe_key = 'telegrarm_delivery_' . md5( http_build_query( $payload, '', '&', PHP_QUERY_RFC3986 ) );
 
 		if ( get_transient( $dedupe_key ) ) {
@@ -73,7 +121,14 @@ final class TelegrARM_Delivery_Queue {
 			)
 		);
 
-		return self::schedule( $payload, time() + 1 );
+		$scheduled = self::schedule( $payload, time() + 1 );
+
+		if ( ! $scheduled ) {
+			// Release the marker so an identical retry is not suppressed.
+			delete_transient( $dedupe_key );
+		}
+
+		return $scheduled;
 	}
 
 	/**
@@ -257,6 +312,14 @@ final class TelegrARM_Delivery_Queue {
 				)
 			);
 			self::forget( $ticket );
+
+			/**
+			 * Fires after Telegram accepts a queued delivery.
+			 *
+			 * @param string $method Bot API method.
+			 * @param string $target Configuration target.
+			 */
+			do_action( 'telegrarm_delivery_sent', $payload['method'], $payload['target'] );
 			return;
 		}
 
@@ -284,16 +347,11 @@ final class TelegrARM_Delivery_Queue {
 				)
 			);
 			self::forget( $ticket );
+			self::abandoned( $payload, self::failure_details( $response ) );
 			return;
 		}
 
-		$details     = is_wp_error( $response )
-			? array(
-				'status_code' => 0,
-				'retry_after' => 0,
-				'error_code'  => $response->get_error_code(),
-			)
-			: TelegrARM_Telegram_Client::response_details( $response );
+		$details     = self::failure_details( $response );
 		$status_code = (int) $details['status_code'];
 
 		if ( ! is_wp_error( $response ) && 429 !== $status_code && $status_code < 500 ) {
@@ -308,13 +366,52 @@ final class TelegrARM_Delivery_Queue {
 				)
 			);
 			self::forget( $ticket );
+			self::abandoned( $payload, $details );
 			return;
 		}
 
+		// A timeout can retry a request Telegram already accepted, producing a
+		// duplicate. That is preferred over losing the notification.
 		$delay = isset( $details['retry_after'] ) && null !== $details['retry_after'] && 0 < $details['retry_after']
 			? (int) $details['retry_after']
 			: 5 * $payload['attempt'];
 		self::schedule( $payload, time() + min( 300, max( 1, $delay ) ), $ticket );
+	}
+
+	/**
+	 * Normalize a failed response for logging and retry decisions.
+	 *
+	 * @param array<string, mixed>|WP_Error $response Failed response.
+	 * @return array<string, mixed>
+	 */
+	private static function failure_details( $response ) {
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'status_code' => 0,
+				'retry_after' => 0,
+				'error_code'  => $response->get_error_code(),
+			);
+		}
+
+		return TelegrARM_Telegram_Client::response_details( $response );
+	}
+
+	/**
+	 * Announce a delivery that will not be retried.
+	 *
+	 * @param array                $payload Queue payload.
+	 * @param array<string, mixed> $details Failure details.
+	 * @return void
+	 */
+	private static function abandoned( array $payload, array $details ) {
+		/**
+		 * Fires when a queued delivery is dropped after a rejection or exhausted retries.
+		 *
+		 * @param string $method  Bot API method.
+		 * @param string $target  Configuration target.
+		 * @param array  $details Status code, Telegram error code, and description.
+		 */
+		do_action( 'telegrarm_delivery_abandoned', $payload['method'], $payload['target'], $details );
 	}
 
 	/**

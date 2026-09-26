@@ -15,6 +15,7 @@ require_once dirname(__DIR__) . '/includes/class-telegrarm-config.php';
 require_once dirname(__DIR__) . '/includes/class-telegrarm-debug-logger.php';
 require_once dirname(__DIR__) . '/includes/class-telegrarm-telegram-client.php';
 require_once dirname(__DIR__) . '/includes/class-telegrarm-delivery-queue.php';
+require_once dirname(__DIR__) . '/includes/class-telegrarm-upgrader.php';
 require_once dirname(__DIR__) . '/telegrarm_settings.php';
 require_once dirname(__DIR__) . '/telegrarm_after_new_user_notification.php';
 require_once dirname(__DIR__) . '/telegrarm_update_profile_external.php';
