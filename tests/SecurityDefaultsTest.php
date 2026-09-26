@@ -20,6 +20,10 @@ final class SecurityDefaultsTest extends TestCase {
         );
     }
 
+    public function test_login_form_remember_me_checkbox_is_not_discoverable(): void {
+        $this->assertFalse(telegrarm_should_include_discovered_metakey('rememberme', array('type' => 'rememberme')));
+    }
+
     public function test_valid_public_profile_key_remains_discoverable(): void {
         $this->assertTrue(telegrarm_should_include_discovered_metakey('first_name'));
     }
@@ -77,6 +81,65 @@ final class SecurityDefaultsTest extends TestCase {
         $this->assertSame('', telegrarm_sanitize_bot_token(''));
 
         $_POST = array();
+    }
+
+    /**
+     * @dataProvider credentialKeyProvider
+     */
+    public function test_credential_keys_are_flagged_sensitive(string $key): void {
+        $this->assertTrue(TelegrARM_Message_Formatter::is_sensitive_key($key));
+    }
+
+    public function credentialKeyProvider(): array {
+        return array(
+            'user_pass'           => array('user_pass'),
+            'uppercase'           => array('USER_PASS'),
+            'confirm password'    => array('confirm_password'),
+            'session tokens'      => array('session_tokens'),
+            'activation key'      => array('user_activation_key'),
+            'capabilities'        => array('wp_capabilities'),
+            'multisite caps'      => array('wp_2_capabilities'),
+            'multisite level'     => array('wp_2_user_level'),
+            'api key'             => array('stripe_api_key'),
+        );
+    }
+
+    /**
+     * @dataProvider publicKeyProvider
+     */
+    public function test_public_profile_keys_are_not_flagged(string $key): void {
+        $this->assertFalse(TelegrARM_Message_Formatter::is_sensitive_key($key));
+    }
+
+    public function publicKeyProvider(): array {
+        return array(
+            'first_name' => array('first_name'),
+            'user_email' => array('user_email'),
+            'author bio' => array('author_bio'),
+            'phone'      => array('text_t0cls'),
+        );
+    }
+
+    public function test_mapping_sanitizer_drops_credential_keys(): void {
+        $sanitized = telegrarm_arm_mapping_sanitize(
+            '{"first_name":"First Name","user_pass":"Password","wp_capabilities":"Roles"}'
+        );
+
+        $this->assertSame(array('first_name' => 'First Name'), $sanitized);
+    }
+
+    public function test_mapped_credential_key_is_never_rendered(): void {
+        $line = TelegrARM_Message_Formatter::profile_line('user_pass', 'hunter2', array('user_pass' => 'Password'));
+
+        $this->assertSame('', $line);
+    }
+
+    public function test_successful_test_message_feedback_omits_the_fallback_description(): void {
+        $ok = array('response' => array('code' => 200), 'body' => '{"ok":true,"result":{}}');
+        $bad = array('response' => array('code' => 400), 'body' => '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}');
+
+        $this->assertStringNotContainsString('Telegram description', telegrarm_build_test_message_feedback('new-user', '-100123', $ok, true));
+        $this->assertStringContainsString('Telegram description: Bad Request: chat not found', telegrarm_build_test_message_feedback('new-user', '-100123', $bad, false));
     }
 
     public function test_channel_ids_are_strictly_validated(): void {

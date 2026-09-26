@@ -22,7 +22,10 @@ function telegrarm_build_registration_profile_line( $key, $value, $map ) {
 }
 
 /**
- * Normalize scalar WordPress user metadata.
+ * Collect the first stored value of each WordPress user meta key, plus the
+ * public account fields that live in the users table rather than in user meta.
+ *
+ * Values are left raw (possibly serialized); the formatter flattens them.
  *
  * @param int $user_id User ID.
  * @return array<string, scalar>
@@ -31,16 +34,27 @@ function telegrarm_get_registration_meta( $user_id ) {
 	$raw_meta = get_user_meta( (int) $user_id );
 	$meta     = array();
 
-	if ( ! is_array( $raw_meta ) ) {
+	if ( is_array( $raw_meta ) ) {
+		foreach ( $raw_meta as $key => $values ) {
+			if ( ! is_string( $key ) || ! is_array( $values ) || ! isset( $values[0] ) || ! is_scalar( $values[0] ) ) {
+				continue;
+			}
+
+			$meta[ $key ] = $values[0];
+		}
+	}
+
+	$user = get_userdata( (int) $user_id );
+
+	if ( ! is_object( $user ) || ! isset( $user->data ) || ! is_object( $user->data ) ) {
 		return $meta;
 	}
 
-	foreach ( $raw_meta as $key => $values ) {
-		if ( ! is_string( $key ) || ! is_array( $values ) || ! isset( $values[0] ) || ! is_scalar( $values[0] ) ) {
-			continue;
+	// Allowlisted: the users table also holds user_pass and user_activation_key.
+	foreach ( array( 'user_login', 'user_email', 'user_url', 'user_registered', 'display_name', 'user_nicename' ) as $field ) {
+		if ( isset( $user->data->{$field} ) && is_scalar( $user->data->{$field} ) ) {
+			$meta[ $field ] = $user->data->{$field};
 		}
-
-		$meta[ $key ] = $values[0];
 	}
 
 	return $meta;
@@ -73,6 +87,18 @@ function telegrarm_after_new_user_notification( $user ) {
 		$mapping
 	);
 
+	/**
+	 * Filter the Telegram HTML message before it is queued.
+	 *
+	 * The returned text is sent with parse_mode HTML, so escape any added content.
+	 *
+	 * @param string $message Telegram HTML message.
+	 * @param string $target  Configuration target: 'new-user' or 'profile'.
+	 * @param int    $user_id User ID.
+	 * @param array  $values  Raw field values the message was built from.
+	 */
+	$message = (string) apply_filters( 'telegrarm_message_text', $message, 'new-user', (int) $user->ID, $meta );
+
 	TelegrARM_Delivery_Queue::enqueue(
 		'sendMessage',
 		'new-user',
@@ -87,7 +113,7 @@ function telegrarm_after_new_user_notification( $user ) {
 	}
 
 	$phone_field = (string) get_option( 'telegram_phone_field_name', 'text_t0cls' );
-	$phone       = isset( $meta[ $phone_field ] ) && is_scalar( $meta[ $phone_field ] ) ? preg_replace( '/[^0-9+]/', '', (string) $meta[ $phone_field ] ) : '';
+	$phone       = isset( $meta[ $phone_field ] ) ? preg_replace( '/[^0-9+]/', '', TelegrARM_Message_Formatter::flatten( $meta[ $phone_field ] ) ) : '';
 
 	if ( ! is_string( $phone ) || '' === $phone ) {
 		TelegrARM_Debug_Logger::log( 'New-user contact skipped: phone number missing.' );
@@ -104,7 +130,8 @@ function telegrarm_after_new_user_notification( $user ) {
 		'new-user',
 		array(
 			'phone_number' => $phone,
-			'first_name'   => isset( $meta['first_name'] ) ? (string) $meta['first_name'] : '',
+			// Telegram requires first_name, so fall back to the login name.
+			'first_name'   => '' !== trim( (string) ( $meta['first_name'] ?? '' ) ) ? (string) $meta['first_name'] : (string) $user->user_login,
 			'last_name'    => isset( $meta['last_name'] ) ? (string) $meta['last_name'] : '',
 		)
 	);

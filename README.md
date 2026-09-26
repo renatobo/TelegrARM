@@ -10,7 +10,7 @@ WordPress plugin for ARMember that sends Telegram notifications for selected use
 ## Features
 
 - ARMember event notifications to Telegram:
-  - Profile updates (`arm_update_profile_external`)
+  - Profile updates (members saving an ARMember edit-profile form, Lite or Pro)
   - New registrations (`arm_after_new_user_notification`)
 - Per-event enable/disable toggles from WordPress admin
 - Separate Telegram channel/chat IDs for each event type
@@ -96,6 +96,20 @@ Special handling already included:
 
 ### Profile Update
 - Sends a formatted list of mapped/allowed fields that were submitted in the update
+
+## Developer Hooks
+
+| Hook | Type | Arguments | Purpose |
+|------|------|-----------|---------|
+| `telegrarm_bot_token` | filter | `$token` | Resolve the bot token at runtime |
+| `telegrarm_message_text` | filter | `$message, $target, $user_id, $values` | Change the Telegram HTML message before it is queued. It is sent with `parse_mode` HTML, so escape anything you add |
+| `telegrarm_should_enqueue` | filter | `$should_enqueue, $method, $target, $body` | Return `false` to skip a delivery |
+| `telegrarm_delivery_sent` | action | `$method, $target` | Telegram accepted a queued delivery |
+| `telegrarm_delivery_abandoned` | action | `$method, $target, $details` | A delivery was rejected or ran out of retries |
+
+`$target` is `new-user` or `profile`. `$method` is `sendMessage` or `sendContact`.
+
+A request that times out is retried, so a delivery Telegram already accepted can occasionally arrive twice. This is preferred over losing a notification.
 
 ## Automatic Updates
 

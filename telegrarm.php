@@ -12,7 +12,6 @@
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       telegrarm
- * Domain Path:       /languages
  *
  * GitHub Plugin URI: https://github.com/renatobo/TelegrARM
  * Primary Branch:    main
@@ -41,7 +40,8 @@ require_once __DIR__ . '/includes/class-telegrarm-upgrader.php';
 
 TelegrARM_Delivery_Queue::register();
 
-register_activation_hook( __FILE__, array( 'TelegrARM_Upgrader', 'run' ) );
+register_activation_hook( __FILE__, array( 'TelegrARM_Upgrader', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'TelegrARM_Delivery_Queue', 'deactivate' ) );
 add_action( 'plugins_loaded', array( 'TelegrARM_Upgrader', 'run' ), 1 );
 
 if ( is_admin() ) {
@@ -49,7 +49,7 @@ if ( is_admin() ) {
 }
 
 add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'telegrarm_add_plugin_action_links' );
-add_action( 'plugins_loaded', 'telegrarm_load_textdomain', 5 );
+add_action( 'init', 'telegrarm_load_textdomain' );
 add_action( 'admin_notices', 'telegrarm_armember_dependency_notice' );
 
 /**
@@ -79,7 +79,7 @@ function telegrarm_add_plugin_action_links( $links ) {
  * @return void
  */
 function telegrarm_load_textdomain() {
-	load_plugin_textdomain( 'telegrarm', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	load_plugin_textdomain( 'telegrarm' );
 }
 
 /**
@@ -108,7 +108,9 @@ function telegrarm_init_hooks_conditionally() {
 	// Load profile update notifications if enabled.
 	if ( get_option( 'telegrarm_profile_update', false ) ) {
 		require_once __DIR__ . '/telegrarm_update_profile_external.php';
-		add_action( 'arm_update_profile_external', 'telegrarm_profile_update', 10, 2 );
+		// ARMember Lite and Pro both fire this pair on a member's front-end profile save.
+		add_action( 'arm_member_update_meta', 'telegrarm_capture_profile_submission', 20, 3 );
+		add_action( 'arm_record_activity', 'telegrarm_notify_on_profile_activity', 20, 1 );
 	}
 
 	// Load new user notifications if enabled.

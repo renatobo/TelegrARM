@@ -129,6 +129,12 @@
     margin-bottom: 18px;
 }
 
+.telegrarm-discovery-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .telegrarm-switch-row-spaced {
     margin-top: 10px;
 }

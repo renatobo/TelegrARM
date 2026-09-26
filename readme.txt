@@ -18,7 +18,7 @@ TelegrARM connects ARMember events to Telegram so your team receives notificatio
 
 Supported notifications:
 - New user registration (`arm_after_new_user_notification`)
-- User profile update (`arm_update_profile_external`)
+- User profile update (a member saving an ARMember edit-profile form, Lite or Pro)
 
 Key capabilities:
 - Enable/disable each event type independently
@@ -69,6 +69,19 @@ Yes. Enable **Send contact on new user registration?**, then configure the phone
 Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. Review Telegram's terms at https://telegram.org/tos and privacy policy at https://telegram.org/privacy.
 
 == Changelog ==
+
+= 1.1.3 =
+- Fixed profile-update notifications never firing on ARMember Lite, which does not fire `arm_update_profile_external`.
+- Fixed `user_login` and `user_email` never appearing in new-user messages.
+- Fixed message lines ignoring the field order set in the mapping builder.
+- Fixed duplicated settings notices and a misleading description on successful test messages.
+- Fixed notifications being dropped when a mapped field contained a named HTML entity such as `&nbsp;`, which Telegram rejects.
+- Fixed checkbox and multi-select fields appearing as serialized data or being omitted; they are now comma-separated lists.
+- Fixed contact cards failing for members without a first name.
+- Rejected credential and permission keys such as `user_pass` from the field mapping and from every message.
+- Cleared cron events and queued payloads on deactivation and uninstall, and cleaned every site on multisite uninstall.
+- Added the `telegrarm_should_enqueue` and `telegrarm_message_text` filters and the `telegrarm_delivery_sent` and `telegrarm_delivery_abandoned` actions.
+- Added suggested privacy policy text, a Rescan button for field discovery, and a disabled token field when `TELEGRARM_BOT_TOKEN` is defined.
 
 = 1.1.2 =
 - Fixed queued notifications being silently dropped when a persistent object cache was flushed after the delivery was scheduled, by storing payloads in randomized, non-autoloaded options instead of transients.
@@ -160,6 +173,9 @@ Yes. TelegrARM sends requests to the Telegram Bot API when enabled events fire. 
 - Optional contact send during registration.
 
 == Upgrade Notice ==
+
+= 1.1.3 =
+Profile-update notifications now work on ARMember Lite. Also fixes messages silently dropped on fields containing entities like `&nbsp;` and shows checkbox fields correctly. Credential keys are now refused in the field mapping. No settings or data migration.
 
 = 1.1.2 =
 Reliability fix release for sites running a persistent object cache, where queued notifications could be lost before WP-Cron delivered them. No settings or data changes, and deliveries queued by earlier versions are processed without migration.

@@ -15,21 +15,30 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-// Remove all plugin options from the database.
-delete_option( 'telegrarm_profile_update' );
-delete_option( 'telegrarm_after_new_user_notification' );
-delete_option( 'telegram_bot_api_token' );
-delete_option( 'telegrarm_debug_logging' );
-delete_option( 'telegram_channel_id_newuser' );
-delete_option( 'telegram_channel_id_updates' );
-delete_option( 'telegram_send_contact_during_registration' );
-delete_option( 'telegram_phone_field_name' );
-delete_option( 'telegram_international_code_if_missing' );
-delete_option( 'telegrarm_arm_mapping' );
-delete_option( 'telegrarm_version' );
+/**
+ * Remove every option, cron event, and queued payload for the current site.
+ *
+ * @return void
+ */
+function telegrarm_uninstall_site() {
+	delete_option( 'telegrarm_profile_update' );
+	delete_option( 'telegrarm_after_new_user_notification' );
+	delete_option( 'telegram_bot_api_token' );
+	delete_option( 'telegrarm_debug_logging' );
+	delete_option( 'telegram_channel_id_newuser' );
+	delete_option( 'telegram_channel_id_updates' );
+	delete_option( 'telegram_send_contact_during_registration' );
+	delete_option( 'telegram_phone_field_name' );
+	delete_option( 'telegram_international_code_if_missing' );
+	delete_option( 'telegrarm_arm_mapping' );
+	delete_option( 'telegrarm_version' );
 
-wp_clear_scheduled_hook( 'telegrarm_process_delivery' );
-wp_clear_scheduled_hook( 'telegrarm_cleanup_deliveries' );
+	// Delivery events carry a ticket argument, which wp_clear_scheduled_hook() would not match.
+	wp_unschedule_hook( 'telegrarm_process_delivery' );
+	wp_clear_scheduled_hook( 'telegrarm_cleanup_deliveries' );
+
+	telegrarm_uninstall_delete_queue_rows();
+}
 
 /**
  * Delete queued delivery payloads, pacing markers, and dedupe markers.
@@ -56,4 +65,19 @@ function telegrarm_uninstall_delete_queue_rows() {
 	);
 }
 
-telegrarm_uninstall_delete_queue_rows();
+if ( is_multisite() ) {
+	$telegrarm_site_ids = get_sites(
+		array(
+			'fields' => 'ids',
+			'number' => 0,
+		)
+	);
+
+	foreach ( $telegrarm_site_ids as $telegrarm_site_id ) {
+		switch_to_blog( (int) $telegrarm_site_id );
+		telegrarm_uninstall_site();
+		restore_current_blog();
+	}
+} else {
+	telegrarm_uninstall_site();
+}

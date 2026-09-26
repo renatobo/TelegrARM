@@ -44,23 +44,7 @@ function telegrarm_should_include_discovered_metakey( $meta_key, array $field_op
 		return false;
 	}
 
-	$excluded_meta_keys = array(
-		'user_pass',
-		'password',
-		'confirm_password',
-		'confirm_user_pass',
-		'repeat_password',
-		'repeat_user_pass',
-		'session_tokens',
-		'wp_capabilities',
-		'wp_user_level',
-	);
-
-	if ( in_array( $meta_key, $excluded_meta_keys, true ) ) {
-		return false;
-	}
-
-	if ( preg_match( '/(?:pass(?:word)?|secret|token|auth|credential|recovery|private[_-]?key|api[_-]?key)/i', $meta_key ) ) {
+	if ( TelegrARM_Message_Formatter::is_sensitive_key( $meta_key ) ) {
 		return false;
 	}
 
@@ -75,7 +59,7 @@ function telegrarm_should_include_discovered_metakey( $meta_key, array $field_op
 	if ( ! empty( $field_options ) ) {
 		$field_type = isset( $field_options['type'] ) && is_scalar( $field_options['type'] ) ? trim( (string) $field_options['type'] ) : '';
 
-		if ( in_array( $field_type, array( 'hidden', 'html', 'password', 'section', 'social_fields', 'submit' ), true ) ) {
+		if ( in_array( $field_type, array( 'hidden', 'html', 'password', 'rememberme', 'section', 'social_fields', 'submit' ), true ) ) {
 			return false;
 		}
 
@@ -229,7 +213,7 @@ function telegrarm_get_armember_preset_field_items() {
 
 	$items = array();
 
-	foreach ( $preset_form_fields as $group_name => $group_fields ) {
+	foreach ( $preset_form_fields as $group_fields ) {
 		if ( ! is_array( $group_fields ) ) {
 			continue;
 		}
@@ -254,8 +238,7 @@ function telegrarm_get_armember_preset_field_items() {
 				continue;
 			}
 
-			$source = 'default' === $group_name ? 'preset' : 'preset';
-			$item   = telegrarm_build_discovered_metakey_item( $meta_key, $label, $source );
+			$item = telegrarm_build_discovered_metakey_item( $meta_key, $label, 'preset' );
 
 			if ( null !== $item ) {
 				$items[] = $item;

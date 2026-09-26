@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const panels = document.querySelectorAll('.telegrarm-panel');
     const mappingTextarea = document.getElementById('telegrarm_arm_mapping');
     const discoverButton = document.getElementById('telegrarm-discover-metakeys');
+    const rescanButton = document.getElementById('telegrarm-rescan-metakeys');
     const selectAllButton = document.getElementById('telegrarm-select-all-metakeys');
     const selectNoneButton = document.getElementById('telegrarm-select-none-metakeys');
     const buildButton = document.getElementById('telegrarm-build-mapping');
@@ -142,7 +143,9 @@ document.addEventListener('DOMContentLoaded', function () {
         resultsNode.hidden = false;
 
         if (!items || !items.length) {
-            resultsNode.innerHTML = '<p>' + i18n.noCandidates + '</p>';
+            const emptyNotice = document.createElement('p');
+            emptyNotice.textContent = i18n.noCandidates || '';
+            resultsNode.appendChild(emptyNotice);
             return;
         }
 
@@ -285,54 +288,73 @@ document.addEventListener('DOMContentLoaded', function () {
         mappingTextarea.focus();
     }
 
+    function setDiscoveryBusy(isBusy) {
+        [discoverButton, rescanButton].forEach(function (button) {
+            if (button) {
+                button.disabled = isBusy;
+            }
+        });
+    }
+
+    function discoverMetakeys(forceRefresh) {
+        setStatus(i18n.discovering);
+        setDiscoveryBusy(true);
+
+        const body = new URLSearchParams();
+        body.set('action', 'telegrarm_discover_arm_metakeys');
+        body.set('_ajax_nonce', ajaxNonce);
+        // Discovery results are cached server-side; only Rescan bypasses the cache.
+        body.set('refresh', forceRefresh ? '1' : '0');
+
+        fetch(ajaxUrl, {
+            credentials: 'same-origin',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            body: body.toString(),
+        })
+            .then(function (response) {
+                return response.json()
+                    .catch(function () {
+                        throw new Error(formatMessage(i18n.requestFailed, response.status));
+                    })
+                    .then(function (payload) {
+                        if (!response.ok) {
+                            const message = payload && payload.data && payload.data.message ? payload.data.message : formatMessage(i18n.requestFailed, response.status);
+                            throw new Error(message);
+                        }
+
+                        return payload;
+                    });
+            })
+            .then(function (payload) {
+                if (!payload || !payload.success || !payload.data || !Array.isArray(payload.data.items)) {
+                    throw new Error(i18n.unexpectedResponse);
+                }
+
+                renderMetakeys(payload.data.items);
+                setStatus(formatCountMessage(i18n.discoveredCountSingular, i18n.discoveredCountPlural, payload.data.count));
+            })
+            .catch(function (error) {
+                resultsNode.hidden = true;
+                resultsNode.innerHTML = '';
+                setStatus(error.message || i18n.unknownDiscoveryError, true);
+            })
+            .finally(function () {
+                setDiscoveryBusy(false);
+            });
+    }
+
     if (discoverButton && resultsNode) {
         discoverButton.addEventListener('click', function () {
-            setStatus(i18n.discovering);
-            discoverButton.disabled = true;
+            discoverMetakeys(false);
+        });
+    }
 
-            const body = new URLSearchParams();
-            body.set('action', 'telegrarm_discover_arm_metakeys');
-            body.set('_ajax_nonce', ajaxNonce);
-            body.set('refresh', '1');
-
-            fetch(ajaxUrl, {
-                credentials: 'same-origin',
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                },
-                body: body.toString(),
-            })
-                .then(function (response) {
-                    return response.json()
-                        .catch(function () {
-                            throw new Error(formatMessage(i18n.requestFailed, response.status));
-                        })
-                        .then(function (payload) {
-                            if (!response.ok) {
-                                const message = payload && payload.data && payload.data.message ? payload.data.message : formatMessage(i18n.requestFailed, response.status);
-                                throw new Error(message);
-                            }
-
-                            return payload;
-                        });
-                })
-                .then(function (payload) {
-                    if (!payload || !payload.success || !payload.data || !Array.isArray(payload.data.items)) {
-                        throw new Error(i18n.unexpectedResponse);
-                    }
-
-                    renderMetakeys(payload.data.items);
-                    setStatus(formatCountMessage(i18n.discoveredCountSingular, i18n.discoveredCountPlural, payload.data.count));
-                })
-                .catch(function (error) {
-                    resultsNode.hidden = true;
-                    resultsNode.innerHTML = '';
-                    setStatus(error.message || i18n.unknownDiscoveryError, true);
-                })
-                .finally(function () {
-                    discoverButton.disabled = false;
-                });
+    if (rescanButton && resultsNode) {
+        rescanButton.addEventListener('click', function () {
+            discoverMetakeys(true);
         });
     }
 

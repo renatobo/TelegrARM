@@ -12,6 +12,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 /** Run idempotent data migrations between plugin versions. */
 final class TelegrARM_Upgrader {
 	/**
+	 * Run on activation, including reactivation at the same version.
+	 *
+	 * @return void
+	 */
+	public static function activate() {
+		TelegrARM_Delivery_Queue::schedule_cleanup();
+		self::run();
+	}
+
+	/**
 	 * Run idempotent activation and version upgrades.
 	 *
 	 * @return void
@@ -27,7 +37,11 @@ final class TelegrARM_Upgrader {
 			self::migrate_token_autoload();
 		}
 
-		update_option( 'telegrarm_version', BONO_TELEGRARM_VERSION, false );
+		TelegrARM_Delivery_Queue::schedule_cleanup();
+
+		// Autoloaded: this is read on every request to detect upgrades.
+		update_option( 'telegrarm_version', BONO_TELEGRARM_VERSION, true );
+		wp_set_option_autoload_values( array( 'telegrarm_version' => true ) );
 	}
 
 	/**

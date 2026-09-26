@@ -30,7 +30,53 @@ final class TelegrARM_Message_Formatter {
 			return '';
 		}
 
-		return esc_html( (string) $value );
+		// Telegram HTML mode accepts only &lt; &gt; &amp; &quot; and numeric entities,
+		// so always double-encode rather than preserving named entities like esc_html().
+		return htmlspecialchars( (string) $value, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8', true );
+	}
+
+	/**
+	 * Whether a key names credential or privilege data that must never leave the site.
+	 *
+	 * @param mixed $key Field or meta key.
+	 * @return bool
+	 */
+	public static function is_sensitive_key( $key ) {
+		$key = is_scalar( $key ) ? strtolower( trim( (string) $key ) ) : '';
+
+		return in_array( $key, array( 'user_pass', 'user_activation_key', 'session_tokens' ), true )
+			|| 1 === preg_match( '/(?:pass(?:word)?|secret|token|credential|recovery|private[_-]?key|api[_-]?key)|_capabilities$|_user_level$/', $key );
+	}
+
+	/**
+	 * Reduce a field value to display text: scalars as-is, lists of scalars comma-joined.
+	 *
+	 * @param mixed $value Raw field value, possibly a serialized string.
+	 * @return string
+	 */
+	public static function flatten( $value ) {
+		if ( is_string( $value ) && is_serialized( $value ) ) {
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize,WordPress.PHP.NoSilencedErrors.Discouraged -- allowed_classes is false, so no object can be instantiated; malformed data yields false.
+			$value = @unserialize( trim( $value ), array( 'allowed_classes' => false ) );
+		}
+
+		if ( is_scalar( $value ) ) {
+			return trim( (string) $value );
+		}
+
+		if ( ! is_array( $value ) ) {
+			return '';
+		}
+
+		$parts = array();
+
+		foreach ( $value as $item ) {
+			if ( is_scalar( $item ) && '' !== trim( (string) $item ) ) {
+				$parts[] = trim( (string) $item );
+			}
+		}
+
+		return implode( ', ', $parts );
 	}
 
 	/**
@@ -42,11 +88,11 @@ final class TelegrARM_Message_Formatter {
 	 * @return string
 	 */
 	public static function profile_line( $key, $value, array $map ) {
-		if ( ! isset( $map[ $key ] ) || ! is_scalar( $value ) ) {
+		if ( ! isset( $map[ $key ] ) || self::is_sensitive_key( $key ) ) {
 			return '';
 		}
 
-		$value_string = trim( (string) $value );
+		$value_string = self::flatten( $value );
 
 		if ( function_exists( 'mb_substr' ) ) {
 			$value_string = mb_substr( $value_string, 0, 1000 );
@@ -69,13 +115,14 @@ final class TelegrARM_Message_Formatter {
 		}
 
 		if ( 'avatar' === $key ) {
-			$avatar_url    = preg_match( '#^https?://#i', $value_string )
+			$avatar_url = preg_match( '#^https?://#i', $value_string )
 				? $value_string
 				: 'https://' . ltrim( $value_string, '/' );
-			$validated_url = wp_http_validate_url( $avatar_url );
+			$parts      = wp_parse_url( $avatar_url );
 
-			if ( false !== $validated_url ) {
-				return $label . ': <a href="' . esc_url( $validated_url ) . '">' . self::escape( $validated_url ) . "</a>\n";
+			// Validate the shape only: a DNS lookup here would block the member's request.
+			if ( is_array( $parts ) && ! empty( $parts['host'] ) && in_array( strtolower( (string) ( $parts['scheme'] ?? '' ) ), array( 'http', 'https' ), true ) ) {
+				return $label . ': <a href="' . esc_url( $avatar_url, array( 'http', 'https' ) ) . '">' . self::escape( $avatar_url ) . "</a>\n";
 			}
 		}
 
@@ -95,12 +142,13 @@ final class TelegrARM_Message_Formatter {
 
 		$omitted_notice = self::escape( __( 'Additional mapped fields were omitted because the Telegram message reached its length limit.', 'telegrarm' ) );
 
-		foreach ( $values as $key => $value ) {
-			if ( ! is_scalar( $key ) ) {
+		// Follow the mapping order, which the admin sets in the mapping builder.
+		foreach ( array_keys( $map ) as $key ) {
+			if ( ! array_key_exists( $key, $values ) ) {
 				continue;
 			}
 
-			$line = self::profile_line( (string) $key, $value, $map );
+			$line = self::profile_line( (string) $key, $values[ $key ], $map );
 
 			if ( self::length( $message . $line . $omitted_notice ) > self::SAFE_TEXT_LIMIT ) {
 				$message .= $omitted_notice;
