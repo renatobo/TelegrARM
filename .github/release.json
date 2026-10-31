@@ -1,0 +1,15 @@
+{
+  "main": "telegrarm.php",
+  "constant": "BONO_TELEGRARM_VERSION",
+  "slug": "TelegrARM",
+  "zip": "TelegrARM-v{version}.zip",
+  "build": "bash build.sh",
+  "php": "8.2",
+  "gates": [
+    "test.yml",
+    "psalm.yml",
+    "codeql.yml"
+  ],
+  "attest": true,
+  "readme": true
+}

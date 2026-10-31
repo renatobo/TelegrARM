@@ -102,7 +102,7 @@ Tests are pure unit tests with no WordPress loaded. `tests/bootstrap.php` define
 ## Common Tasks
 
 ### Updating Version Number
-Prefer `./release.sh x.y.z`, which rewrites all four references and verifies they match. When editing by hand:
+Prepare the four version references in a release PR; follow `AGENTS.md` for label/merge publication:
 1. Plugin header `Version:` in [telegrarm.php](telegrarm.php)
 2. `BONO_TELEGRARM_VERSION` constant in [telegrarm.php](telegrarm.php)
 3. `Stable tag` in [readme.txt](readme.txt)
@@ -125,17 +125,7 @@ Prefer `./release.sh x.y.z`, which rewrites all four references and verifies the
 
 ## Release Process
 
-The plugin uses GitHub Actions for automated releases:
-- write `release-notes/x.y.z.md` first, with the `## New Features`, `## Improvements`, and `## Bug Fixes` headings. `release.sh` and the release workflow both refuse to run without it
-- `./build.sh` creates a versioned WordPress plugin ZIP from an explicit file allowlist
-- `./release.sh x.y.z` verifies the notes file, refuses to run when non-release paths are dirty, syncs version metadata, commits the bump, and pushes the version tag
-- pushing `v*` tags builds the ZIP, validates it, attaches it to the GitHub Release with its SHA-256 checksum and build provenance attestation, and uses the notes file as the release body
-- the plugin header advertises `Primary Branch` and `Release Asset` for Git Updater compatibility
-- `release.sh` aborts when any path outside its allowlist is dirty or untracked. Gitignore local scratch files rather than leaving them at the repo root (this is why there is no `.claude.local.md`)
-- it `git add`s the paths *inside* that allowlist (`readme.txt`, `telegrarm.php`, `README.md`, `build.sh`, `release.sh`, `.gitignore`, `.github/workflows/package-plugin.yml`, `release-notes/`). Uncommitted work in those files lands in the "Bump version" commit
-- run phpcs before tagging. It is the one gate not runnable out of the box, and CI runs after the tag is pushed, so a failure leaves a published tag with a red run
-- `release.sh` does **not** update the `readme.txt` changelog or Upgrade Notice. Add both by hand before releasing; only version numbers are automated
-- See [.github/workflows/](.github/workflows/) for automation details
+The supported release path is the labelled-PR workflow documented in `AGENTS.md`. Align version metadata and add `release-notes/X.Y.Z.md`, apply `release` before merge, and inspect publication afterward. Existing CI, ZIP validation, checksum and provenance checks are retained. The old Manual Release/tag-triggered workflows are removed; `release.sh` refuses direct tagging. Do not restore them alongside the new publisher.
 
 ## External Resources
 
