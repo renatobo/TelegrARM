@@ -134,37 +134,10 @@ The archive includes only runtime plugin files plus `README.md`, `SECURITY.md`, 
 
 ## Releases
 
-The release badge above reflects the latest published GitHub Release, not just the latest git tag.
-
-Use one of these explicit release paths to publish a WordPress-ready ZIP:
-
-### Local release path
-
-```bash
-./release.sh x.y.z
-```
-
-This is the primary operator workflow. It:
-
-- updates the plugin version in `telegrarm.php`
-- updates the stable tag in `readme.txt`
-- updates the `Version` field in `readme.txt`
-- commits the version bump
-- creates and pushes the git tag `vx.y.z`
-- verifies that the plugin header, `BONO_TELEGRARM_VERSION`, `Stable tag`, and `readme.txt` `Version` all match
-
-Pushing the tag triggers GitHub Actions, which runs `./build.sh`, creates or updates the GitHub Release for that tag, and uploads the generated ZIP asset automatically.
-
-### Manual GitHub Actions path
-
-Use the **Manual Release** workflow with a `version` input when you want GitHub Actions to perform an explicit release without relying on a separate tag-push workflow.
-
-The manual workflow:
-
-- validates that `telegrarm.php` and `readme.txt` already match the requested version
-- reuses the existing `vx.y.z` tag or creates it if it does not exist
-- runs `./build.sh`
-- creates or updates the GitHub Release and uploads the generated ZIP asset
+Prepare matching version metadata and `release-notes/X.Y.Z.md` in a PR into
+`main`. Apply the **`release`** label before merging. GitHub runs the exact
+merge commit through the existing CI gates and publishes its tested ZIP and
+checksum automatically. See `AGENTS.md` for the complete procedure and retries.
 
 ## Related Repositories
 
